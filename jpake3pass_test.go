@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestJpake(t *testing.T) {
+func TestJpake3Pass(t *testing.T) {
 	jpake1, err := InitJpake([]byte("one"), []byte("password"), []byte("CONFIRM"))
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
@@ -45,7 +45,7 @@ func TestJpake(t *testing.T) {
 	}
 }
 
-func TestJpakeDifferentPasswords(t *testing.T) {
+func TestJpake3PassDifferentPasswords(t *testing.T) {
 	jpake1, err := InitJpake([]byte("one"), []byte("password"), []byte("CONFIRM"))
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
@@ -76,7 +76,7 @@ func TestJpakeDifferentPasswords(t *testing.T) {
 	}
 }
 
-func TestJpakeDifferentConfirmation(t *testing.T) {
+func TestJpake3PassDifferentConfirmation(t *testing.T) {
 	jpake1, err := InitJpake([]byte("one"), []byte("password"), []byte("CONFIRM1"))
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
@@ -111,7 +111,7 @@ func TestJpakeDifferentConfirmation(t *testing.T) {
 		t.Fatalf("expected session keys to be equal %x %x", jpake1.sessionKey, jpake2.sessionKey)
 	}
 }
-func TestJpakeSameUserIDs(t *testing.T) {
+func TestJpake3PassSameUserIDs(t *testing.T) {
 	jpake1, err := InitJpake([]byte("one"), []byte("password"), []byte("CONFIRM"))
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)

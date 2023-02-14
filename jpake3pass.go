@@ -210,7 +210,7 @@ type Pass3Message[P CurvePoint[P]] struct {
 // 	Params() *elliptic.CurveParams
 // }
 
-type JPake[P CurvePoint[P]] struct {
+type JPake3Pass[P CurvePoint[P]] struct {
 	// Variables which can be shared
 	X1G    P
 	X2G    P
@@ -239,16 +239,16 @@ type JPake[P CurvePoint[P]] struct {
 
 // curve25519Curve{curve[curvePoint[curve25519point]]}
 
-func InitJpake(userID, pw, sessionConfirmationBytes []byte) (*JPake[*Curve25519point], error) {
+func InitJpake(userID, pw, sessionConfirmationBytes []byte) (*JPake3Pass[*Curve25519point], error) {
 	return InitJpakeWithCurveAndHashFns[*Curve25519point](userID, pw, sessionConfirmationBytes, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
 }
 
-func InitJpakeWithCurve[P CurvePoint[P]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P]) (*JPake[P], error) {
+func InitJpakeWithCurve[P CurvePoint[P]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P]) (*JPake3Pass[P], error) {
 	return InitJpakeWithCurveAndHashFns(userID, pw, sessionConfirmationBytes, curve, sha256HashFn, hmacsha256KDF)
 }
 
-func InitJpakeWithCurveAndHashFns[P CurvePoint[P]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P], hashFn HashFnType, kdf KDFType) (*JPake[P], error) {
-	jp := new(JPake[P])
+func InitJpakeWithCurveAndHashFns[P CurvePoint[P]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P], hashFn HashFnType, kdf KDFType) (*JPake3Pass[P], error) {
+	jp := new(JPake3Pass[P])
 	jp.sessionKey = []byte{} // make sure to invalidate the session key
 	jp.userID = userID
 	jp.sessionConfirmationBytes = sessionConfirmationBytes
@@ -274,7 +274,7 @@ func InitJpakeWithCurveAndHashFns[P CurvePoint[P]](userID, pw, sessionConfirmati
 	return jp, err
 }
 
-func (jp *JPake[P]) initWithCurveAndHashFns(curve Curve[P], hashFn HashFnType, kdf KDFType) error {
+func (jp *JPake3Pass[P]) initWithCurveAndHashFns(curve Curve[P], hashFn HashFnType, kdf KDFType) error {
 	jp.curve = curve
 	jp.hashFn = hashFn
 	jp.kdf = kdf
@@ -297,7 +297,7 @@ func (jp *JPake[P]) initWithCurveAndHashFns(curve Curve[P], hashFn HashFnType, k
 	return nil
 }
 
-func (jp *JPake[P]) computeZKP(x []byte, generator P, y P) (ZKPMsg[P], error) {
+func (jp *JPake3Pass[P]) computeZKP(x []byte, generator P, y P) (ZKPMsg[P], error) {
 	// Computes a ZKP for x on Generator. We use the Fiat-Shamir heuristic:
 	// https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic
 	// i.e. prove that we know x such that y = x.Generator
@@ -336,7 +336,7 @@ func (jp *JPake[P]) computeZKP(x []byte, generator P, y P) (ZKPMsg[P], error) {
 	}, err
 }
 
-func (jp *JPake[P]) checkZKP(msgObj ZKPMsg[P], generator, y P) bool {
+func (jp *JPake3Pass[P]) checkZKP(msgObj ZKPMsg[P], generator, y P) bool {
 	chal := generator.Bytes()
 	chal = append(chal, msgObj.T.Bytes()[:]...)
 	chal = append(chal, y.Bytes()[:]...)
@@ -357,7 +357,7 @@ func (jp *JPake[P]) checkZKP(msgObj ZKPMsg[P], generator, y P) bool {
 	return vcheck.Equal(msgObj.T) == 1
 }
 
-func (jp *JPake[P]) Pass1Message() (*Pass1Message[P], error) {
+func (jp *JPake3Pass[P]) Pass1Message() (*Pass1Message[P], error) {
 	x1ZKP, err := jp.computeZKP(jp.x1, jp.curve.NewGeneratorPoint(), jp.X1G)
 	if err != nil {
 		return nil, err
@@ -377,7 +377,7 @@ func (jp *JPake[P]) Pass1Message() (*Pass1Message[P], error) {
 	return &pass1Message, nil
 }
 
-func (jp *JPake[P]) GetPass2Message(msg Pass1Message[P]) (*Pass2Message[P], error) {
+func (jp *JPake3Pass[P]) GetPass2Message(msg Pass1Message[P]) (*Pass2Message[P], error) {
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
@@ -427,7 +427,7 @@ func (jp *JPake[P]) GetPass2Message(msg Pass1Message[P]) (*Pass2Message[P], erro
 	return &pass2Msg, nil
 }
 
-func (jp *JPake[P]) GetPass3Message(msg Pass2Message[P]) (*Pass3Message[P], error) {
+func (jp *JPake3Pass[P]) GetPass3Message(msg Pass2Message[P]) (*Pass3Message[P], error) {
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
@@ -473,7 +473,7 @@ func (jp *JPake[P]) GetPass3Message(msg Pass2Message[P]) (*Pass3Message[P], erro
 	return &pass3Msg, nil
 }
 
-func (jp *JPake[P]) ProcessPass3Message(msg Pass3Message[P]) error {
+func (jp *JPake3Pass[P]) ProcessPass3Message(msg Pass3Message[P]) error {
 	// validate ZKPs
 	tmp1 := jp.curve.NewPoint().Add(jp.X1G, jp.X2G)
 	zkpGenerator := tmp1.Add(tmp1, jp.Otherx1G)
@@ -489,25 +489,25 @@ func (jp *JPake[P]) ProcessPass3Message(msg Pass3Message[P]) error {
 	return nil
 }
 
-func (jp *JPake[P]) SessionConfirmation1() []byte {
+func (jp *JPake3Pass[P]) SessionConfirmation1() []byte {
 	return jp.sessionConfirmation(true)
 }
 
-func (jp *JPake[P]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
+func (jp *JPake3Pass[P]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
 	if !bytes.Equal(confirm1, jp.sessionConfirmation(true)) {
 		return nil, errors.New("cannot confirm session")
 	}
 	return jp.sessionConfirmation(false), nil
 }
 
-func (jp *JPake[P]) ProcessSessionConfirmation2(confirm2 []byte) error {
+func (jp *JPake3Pass[P]) ProcessSessionConfirmation2(confirm2 []byte) error {
 	if !bytes.Equal(confirm2, jp.sessionConfirmation(false)) {
 		return errors.New("cannot confirm session")
 	}
 	return nil
 }
 
-func (jp *JPake[P]) computeSharedKey(p P) error {
+func (jp *JPake3Pass[P]) computeSharedKey(p P) error {
 	// compute either
 	// (B - (G4 x [x2*s])) x [x2]
 	// (A - (G2 x [x4*s])) x [x4]
@@ -528,7 +528,7 @@ func (jp *JPake[P]) computeSharedKey(p P) error {
 	return nil
 }
 
-func (jp *JPake[P]) sessionConfirmation(second bool) []byte {
+func (jp *JPake3Pass[P]) sessionConfirmation(second bool) []byte {
 	v := append(jp.sessionKey[:], jp.sessionConfirmationBytes...)
 	h := jp.hashFn(jp.kdf(v))
 	if second {
