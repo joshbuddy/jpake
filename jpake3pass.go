@@ -46,7 +46,7 @@ type Curve[P CurvePoint[P]] interface {
 	BigIntFromScalar(b []byte) *big.Int
 }
 
-type Curve25519Curve []struct {
+type Curve25519Curve struct {
 	Curve[*Curve25519point]
 }
 
