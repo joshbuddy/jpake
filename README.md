@@ -9,4 +9,5 @@ For key confirmation, the procedure outlined in the rfc based on the SPEKE proto
 
 Pull requests are welcome! If you wish to add more curves, add the 2-pass variant or other key confirmation methods, please do, and thanks.
 
-Also thanks to @choonkiatlee for https://github.com/choonkiatlee/jpake-go which was very helpful in making this.
+Also thanks to @choonkiatlee for https://github.com/choonkiatlee/jpake-go which was very helpful in making this. This library improves on this by adding support for a
+user id within the ZKP. As well, it no longer relies on `crypto/elliptic` (see https://github.com/golang/go/issues/52221).
