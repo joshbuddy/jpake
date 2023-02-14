@@ -46,25 +46,25 @@ type Curve[P CurvePoint[P]] interface {
 	BigIntFromScalar(b []byte) *big.Int
 }
 
-type curve25519Curve []struct {
+type Curve25519Curve []struct {
 	Curve[*Curve25519point]
 }
 
-func (c curve25519Curve) Params() *CurveParams {
+func (c Curve25519Curve) Params() *CurveParams {
 	return Curve25519Params
 }
 
-func (c curve25519Curve) NewGeneratorPoint() *Curve25519point {
+func (c Curve25519Curve) NewGeneratorPoint() *Curve25519point {
 	p := edwards25519.NewGeneratorPoint()
 	return &Curve25519point{p}
 }
 
-func (c curve25519Curve) NewPoint() *Curve25519point {
+func (c Curve25519Curve) NewPoint() *Curve25519point {
 	p := edwards25519.NewIdentityPoint()
 	return &Curve25519point{p}
 }
 
-func (c curve25519Curve) NewRandomScalar() ([]byte, error) {
+func (c Curve25519Curve) NewRandomScalar() ([]byte, error) {
 	s := [64]byte{}
 	_, err := io.ReadFull(crypto_rand.Reader, s[:])
 	if err != nil {
@@ -77,7 +77,7 @@ func (c curve25519Curve) NewRandomScalar() ([]byte, error) {
 	return scalar.Bytes(), nil
 }
 
-func (c curve25519Curve) NewScalarFromSecret(b []byte) ([]byte, error) {
+func (c Curve25519Curve) NewScalarFromSecret(b []byte) ([]byte, error) {
 	i := new(big.Int).SetBytes(b)
 	i.Mod(i, c.Params().N)
 	// TODO: check if i is 0
@@ -89,7 +89,7 @@ func (c curve25519Curve) NewScalarFromSecret(b []byte) ([]byte, error) {
 	return scalar.Bytes(), nil
 }
 
-func (c curve25519Curve) MultiplyScalar(a, b []byte) ([]byte, error) {
+func (c Curve25519Curve) MultiplyScalar(a, b []byte) ([]byte, error) {
 	sa := edwards25519.NewScalar()
 	if _, err := sa.SetCanonicalBytes(a); err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func (c curve25519Curve) MultiplyScalar(a, b []byte) ([]byte, error) {
 	return sa.Bytes(), nil
 }
 
-func (c curve25519Curve) ScalarFromBigInt(b *big.Int) []byte {
+func (c Curve25519Curve) ScalarFromBigInt(b *big.Int) []byte {
 	s := make([]byte, 32)
 	b.FillBytes(s)
 	for i := 0; i < 16; i++ {
@@ -111,7 +111,7 @@ func (c curve25519Curve) ScalarFromBigInt(b *big.Int) []byte {
 	return s
 }
 
-func (c curve25519Curve) BigIntFromScalar(b []byte) *big.Int {
+func (c Curve25519Curve) BigIntFromScalar(b []byte) *big.Int {
 	if len(b) != 32 {
 		panic("expected b to be 32 len")
 	}
@@ -240,7 +240,7 @@ type JPake[P CurvePoint[P]] struct {
 // curve25519Curve{curve[curvePoint[curve25519point]]}
 
 func InitJpake(userID, pw, sessionConfirmationBytes []byte) (*JPake[*Curve25519point], error) {
-	return InitJpakeWithCurveAndHashFns[*Curve25519point](userID, pw, sessionConfirmationBytes, curve25519Curve{}, sha256HashFn, hmacsha256KDF)
+	return InitJpakeWithCurveAndHashFns[*Curve25519point](userID, pw, sessionConfirmationBytes, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
 }
 
 func InitJpakeWithCurve[P CurvePoint[P]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P]) (*JPake[P], error) {
