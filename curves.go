@@ -15,9 +15,9 @@ type CurveParams struct {
 type CurvePoint[P any, S any] interface {
 	Add(r1, r2 P) P
 	Subtract(r1, r2 P) P
-	Bytes() []byte
 	ScalarBaseMult(scalar S) (P, error)
 	ScalarMult(q P, scalar S) (P, error)
+	Bytes() []byte
 	SetBytes(b []byte) (P, error)
 	Equal(q P) int
 }
@@ -26,6 +26,8 @@ type CurveScalar[S any] interface {
 	SetBigInt(*big.Int) S
 	BigInt() *big.Int
 	Multiply(S, S) (S, error)
+	Bytes() []byte
+	SetBytes(b []byte) (S, error)
 }
 
 type Curve[P CurvePoint[P, S], S CurveScalar[S]] interface {
@@ -151,4 +153,13 @@ func (s *Curve25519scalar) SetBigInt(i *big.Int) *Curve25519scalar {
 
 func (s *Curve25519scalar) Multiply(t *Curve25519scalar, u *Curve25519scalar) (*Curve25519scalar, error) {
 	return (*Curve25519scalar)((*edwards25519.Scalar)(s).Multiply((*edwards25519.Scalar)(t), (*edwards25519.Scalar)(u))), nil
+}
+
+func (s *Curve25519scalar) SetBytes(b []byte) (*Curve25519scalar, error) {
+	s1, err := ((*edwards25519.Scalar)(s).SetCanonicalBytes(b))
+	return (*Curve25519scalar)(s1), err
+}
+
+func (s *Curve25519scalar) Bytes() []byte {
+	return ((*edwards25519.Scalar)(s).Bytes())
 }
