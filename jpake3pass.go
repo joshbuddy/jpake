@@ -3,214 +3,38 @@ package jpake
 import (
 	"bytes"
 	"crypto/hmac"
-	crypto_rand "crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"errors"
-	"io"
 	"math/big"
-
-	"filippo.io/edwards25519"
 )
 
-type CurveParams struct {
-	N *big.Int
-}
-
-var Curve25519Params = &CurveParams{
-	N: bigFromHex("1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed"),
-}
-
-type Curve25519point struct {
-	*edwards25519.Point
-}
-
-type CurvePoint[P any] interface {
-	Add(r1, r2 P) P
-	Subtract(r1, r2 P) P
-	Bytes() []byte
-	ScalarBaseMult(scalar []byte) (P, error)
-	ScalarMult(q P, scalar []byte) (P, error)
-	SetBytes(b []byte) (P, error)
-	Equal(q P) int
-}
-
-type Curve[P CurvePoint[P]] interface {
-	Params() *CurveParams
-	NewGeneratorPoint() P
-	MultiplyScalar([]byte, []byte) ([]byte, error)
-	NewRandomScalar() ([]byte, error)
-	NewScalarFromSecret([]byte) ([]byte, error)
-	NewPoint() P
-	ScalarFromBigInt(b *big.Int) []byte
-	BigIntFromScalar(b []byte) *big.Int
-}
-
-type Curve25519Curve struct {
-	Curve[*Curve25519point]
-}
-
-func (c Curve25519Curve) Params() *CurveParams {
-	return Curve25519Params
-}
-
-func (c Curve25519Curve) NewGeneratorPoint() *Curve25519point {
-	p := edwards25519.NewGeneratorPoint()
-	return &Curve25519point{p}
-}
-
-func (c Curve25519Curve) NewPoint() *Curve25519point {
-	p := edwards25519.NewIdentityPoint()
-	return &Curve25519point{p}
-}
-
-func (c Curve25519Curve) NewRandomScalar() ([]byte, error) {
-	s := [64]byte{}
-	_, err := io.ReadFull(crypto_rand.Reader, s[:])
-	if err != nil {
-		return nil, err
-	}
-	scalar := edwards25519.NewScalar()
-	if _, err := scalar.SetUniformBytes(s[:]); err != nil {
-		return nil, err
-	}
-	return scalar.Bytes(), nil
-}
-
-func (c Curve25519Curve) NewScalarFromSecret(b []byte) ([]byte, error) {
-	i := new(big.Int).SetBytes(b)
-	i.Mod(i, c.Params().N)
-	// TODO: check if i is 0
-
-	scalar := edwards25519.NewScalar()
-	if _, err := scalar.SetCanonicalBytes(c.ScalarFromBigInt(i)); err != nil {
-		return nil, err
-	}
-	return scalar.Bytes(), nil
-}
-
-func (c Curve25519Curve) MultiplyScalar(a, b []byte) ([]byte, error) {
-	sa := edwards25519.NewScalar()
-	if _, err := sa.SetCanonicalBytes(a); err != nil {
-		return nil, err
-	}
-	sb := edwards25519.NewScalar()
-	if _, err := sb.SetCanonicalBytes(b); err != nil {
-		return nil, err
-	}
-	sa.Multiply(sa, sb)
-	return sa.Bytes(), nil
-}
-
-func (c Curve25519Curve) ScalarFromBigInt(b *big.Int) []byte {
-	s := make([]byte, 32)
-	b.FillBytes(s)
-	for i := 0; i < 16; i++ {
-		s[i], s[32-i-1] = s[32-i-1], s[i]
-	}
-	return s
-}
-
-func (c Curve25519Curve) BigIntFromScalar(b []byte) *big.Int {
-	if len(b) != 32 {
-		panic("expected b to be 32 len")
-	}
-	var s [32]byte
-	copy(s[:], b)
-
-	for i := 0; i < 16; i++ {
-		s[i], s[32-i-1] = s[32-i-1], s[i]
-	}
-	return new(big.Int).SetBytes(s[:])
-
-}
-
-func (p *Curve25519point) Add(r1, r2 *Curve25519point) *Curve25519point {
-	p.Point = p.Point.Add(r1.Point, r2.Point)
-	return p
-}
-
-func (p *Curve25519point) Subtract(r1, r2 *Curve25519point) *Curve25519point {
-	p.Point = p.Point.Subtract(r1.Point, r2.Point)
-	return p
-}
-
-func (p *Curve25519point) ScalarBaseMult(scalar []byte) (*Curve25519point, error) {
-	s := edwards25519.NewScalar()
-	_, err := s.SetCanonicalBytes(scalar)
-	if err != nil {
-		return p, err
-	}
-	p.Point.ScalarBaseMult(s)
-	return p, nil
-}
-
-func (p *Curve25519point) ScalarMult(q *Curve25519point, x []byte) (*Curve25519point, error) {
-	s := edwards25519.NewScalar()
-	_, err := s.SetCanonicalBytes(x)
-	if err != nil {
-		return p, err
-	}
-	p.Point = p.Point.ScalarMult(s, q.Point)
-	return p, nil
-}
-
-func (p *Curve25519point) SetBytes(b []byte) (*Curve25519point, error) {
-	_, err := p.Point.SetBytes(b)
-	return p, err
-}
-
-func (p *Curve25519point) Equal(q *Curve25519point) int {
-	return p.Point.Equal(q.Point)
-}
-
-type (
-	HashFnType func([]byte) []byte
-	KDFType    func([]byte) []byte
-)
-
-type ZKPMsg[P CurvePoint[P]] struct {
-	T P
-	R []byte
-	C []byte
-}
-
-type Pass1Message[P CurvePoint[P]] struct {
+type ThreePassVariant1[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	UserID []byte
 	X1G    P
 	X2G    P
-	X1ZKP  ZKPMsg[P]
-	X2ZKP  ZKPMsg[P]
+	X1ZKP  ZKPMsg[P, S]
+	X2ZKP  ZKPMsg[P, S]
 }
 
-type Pass2Message[P CurvePoint[P]] struct {
+type ThreePassVariant2[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	UserID []byte
 	X3G    P
 	X4G    P
 	B      P
-	XsZKP  ZKPMsg[P]
-	X3ZKP  ZKPMsg[P]
-	X4ZKP  ZKPMsg[P]
+	XsZKP  ZKPMsg[P, S]
+	X3ZKP  ZKPMsg[P, S]
+	X4ZKP  ZKPMsg[P, S]
 }
 
-type Pass3Message[P CurvePoint[P]] struct {
+type ThreePassVariant3[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	A     P
-	XsZKP ZKPMsg[P]
+	XsZKP ZKPMsg[P, S]
 }
 
 // three pass variant jpake
 // https://tools.ietf.org/html/rfc8236#section-4
-
-// EllipticCurve is a general curve which allows other
-// elliptic curves to be used with PAKE.
-// type EllipticCurve interface {
-// 	Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int)
-// 	ScalarBaseMult(k []byte) (*big.Int, *big.Int)
-// 	ScalarMult(Bx, By *big.Int, k []byte) (*big.Int, *big.Int)
-// 	Params() *elliptic.CurveParams
-// }
-
-type JPake3Pass[P CurvePoint[P]] struct {
+type ThreePassJpake[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	// Variables which can be shared
 	X1G    P
 	X2G    P
@@ -222,33 +46,33 @@ type JPake3Pass[P CurvePoint[P]] struct {
 	OtherUserID []byte
 
 	// Calculated values
-	x2s        []byte
+	x2s        S
 	sessionKey []byte
 
 	// Private Variables
-	x1 []byte
-	x2 []byte
-	s  []byte
+	x1 S
+	x2 S
+	s  S
 
 	// configuration
 	sessionConfirmationBytes []byte
 	hashFn                   HashFnType
 	kdf                      KDFType
-	curve                    Curve[P]
+	curve                    Curve[P, S]
 }
 
 // curve25519Curve{curve[curvePoint[curve25519point]]}
 
-func InitJpake(userID, pw, sessionConfirmationBytes []byte) (*JPake3Pass[*Curve25519point], error) {
-	return InitJpakeWithCurveAndHashFns[*Curve25519point](userID, pw, sessionConfirmationBytes, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
+func InitThreePassJpake(userID, pw, sessionConfirmationBytes []byte) (*ThreePassJpake[*Curve25519point, *Curve25519scalar], error) {
+	return InitThreePassJpakeWithCurveAndHashFns[*Curve25519point, *Curve25519scalar](userID, pw, sessionConfirmationBytes, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
 }
 
-func InitJpakeWithCurve[P CurvePoint[P]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P]) (*JPake3Pass[P], error) {
-	return InitJpakeWithCurveAndHashFns(userID, pw, sessionConfirmationBytes, curve, sha256HashFn, hmacsha256KDF)
+func InitThreePassJpakeWithCurve[P CurvePoint[P, S], S CurveScalar[S]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P, S]) (*ThreePassJpake[P, S], error) {
+	return InitThreePassJpakeWithCurveAndHashFns(userID, pw, sessionConfirmationBytes, curve, sha256HashFn, hmacsha256KDF)
 }
 
-func InitJpakeWithCurveAndHashFns[P CurvePoint[P]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P], hashFn HashFnType, kdf KDFType) (*JPake3Pass[P], error) {
-	jp := new(JPake3Pass[P])
+func InitThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P, S], hashFn HashFnType, kdf KDFType) (*ThreePassJpake[P, S], error) {
+	jp := new(ThreePassJpake[P, S])
 	jp.sessionKey = []byte{} // make sure to invalidate the session key
 	jp.userID = userID
 	jp.sessionConfirmationBytes = sessionConfirmationBytes
@@ -274,7 +98,7 @@ func InitJpakeWithCurveAndHashFns[P CurvePoint[P]](userID, pw, sessionConfirmati
 	return jp, err
 }
 
-func (jp *JPake3Pass[P]) initWithCurveAndHashFns(curve Curve[P], hashFn HashFnType, kdf KDFType) error {
+func (jp *ThreePassJpake[P, S]) initWithCurveAndHashFns(curve Curve[P, S], hashFn HashFnType, kdf KDFType) error {
 	jp.curve = curve
 	jp.hashFn = hashFn
 	jp.kdf = kdf
@@ -290,14 +114,14 @@ func (jp *JPake3Pass[P]) initWithCurveAndHashFns(curve Curve[P], hashFn HashFnTy
 	}
 	jp.X2G = p2
 
-	jp.x2s, err = curve.MultiplyScalar(jp.x2, jp.s)
+	jp.x2s, err = jp.curve.NewScalar().Multiply(jp.x2, jp.s)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (jp *JPake3Pass[P]) computeZKP(x []byte, generator P, y P) (ZKPMsg[P], error) {
+func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S], error) {
 	// Computes a ZKP for x on Generator. We use the Fiat-Shamir heuristic:
 	// https://en.wikipedia.org/wiki/Fiat%E2%80%93Shamir_heuristic
 	// i.e. prove that we know x such that y = x.Generator
@@ -307,12 +131,12 @@ func (jp *JPake3Pass[P]) computeZKP(x []byte, generator P, y P) (ZKPMsg[P], erro
 	// 1. Pick a random v \in Z_q* and compute t = vG
 	v, err := jp.curve.NewRandomScalar()
 	if err != nil {
-		return ZKPMsg[P]{}, err
+		return ZKPMsg[P, S]{}, err
 	}
 
 	t, err := jp.curve.NewPoint().ScalarMult(generator, v)
 	if err != nil {
-		return ZKPMsg[P]{}, err
+		return ZKPMsg[P, S]{}, err
 	}
 
 	// 2. Compute c = H(g, y, t) where H() is a cryptographic hash fn
@@ -324,19 +148,19 @@ func (jp *JPake3Pass[P]) computeZKP(x []byte, generator P, y P) (ZKPMsg[P], erro
 
 	// Need to store the result of Mul(c,x) in a new pointer as we need c later,
 	// but we don't need to do the same for v because we don't use it afterwards
-	vint := jp.curve.BigIntFromScalar(v)
-	xint := jp.curve.BigIntFromScalar(x)
+	vint := v.BigInt()
+	xint := x.BigInt()
 	rIntermediate := vint.Sub(vint, new(big.Int).Mul(c, xint))
 	r := rIntermediate.Mod(rIntermediate, jp.curve.Params().N)
 
-	return ZKPMsg[P]{
+	return ZKPMsg[P, S]{
 		T: t,
-		R: jp.curve.ScalarFromBigInt(r),
-		C: jp.curve.ScalarFromBigInt(c),
+		R: jp.curve.NewScalar().SetBigInt(r),
+		C: jp.curve.NewScalar().SetBigInt(c),
 	}, err
 }
 
-func (jp *JPake3Pass[P]) checkZKP(msgObj ZKPMsg[P], generator, y P) bool {
+func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bool {
 	chal := generator.Bytes()
 	chal = append(chal, msgObj.T.Bytes()[:]...)
 	chal = append(chal, y.Bytes()[:]...)
@@ -349,7 +173,7 @@ func (jp *JPake3Pass[P]) checkZKP(msgObj ZKPMsg[P], generator, y P) bool {
 	if err != nil {
 		return false
 	}
-	tmp2, err := jp.curve.NewPoint().ScalarMult(y, jp.curve.ScalarFromBigInt(c))
+	tmp2, err := jp.curve.NewPoint().ScalarMult(y, jp.curve.NewScalar().SetBigInt(c))
 	if err != nil {
 		return false
 	}
@@ -357,7 +181,7 @@ func (jp *JPake3Pass[P]) checkZKP(msgObj ZKPMsg[P], generator, y P) bool {
 	return vcheck.Equal(msgObj.T) == 1
 }
 
-func (jp *JPake3Pass[P]) Pass1Message() (*Pass1Message[P], error) {
+func (jp *ThreePassJpake[P, S]) Pass1Message() (*ThreePassVariant1[P, S], error) {
 	x1ZKP, err := jp.computeZKP(jp.x1, jp.curve.NewGeneratorPoint(), jp.X1G)
 	if err != nil {
 		return nil, err
@@ -367,7 +191,7 @@ func (jp *JPake3Pass[P]) Pass1Message() (*Pass1Message[P], error) {
 		return nil, err
 	}
 
-	pass1Message := Pass1Message[P]{
+	pass1Message := ThreePassVariant1[P, S]{
 		UserID: jp.userID,
 		X1G:    jp.X1G,
 		X2G:    jp.X2G,
@@ -377,7 +201,7 @@ func (jp *JPake3Pass[P]) Pass1Message() (*Pass1Message[P], error) {
 	return &pass1Message, nil
 }
 
-func (jp *JPake3Pass[P]) GetPass2Message(msg Pass1Message[P]) (*Pass2Message[P], error) {
+func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*ThreePassVariant2[P, S], error) {
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
@@ -415,7 +239,7 @@ func (jp *JPake3Pass[P]) GetPass2Message(msg Pass1Message[P]) (*Pass2Message[P],
 		return nil, err
 	}
 
-	pass2Msg := Pass2Message[P]{
+	pass2Msg := ThreePassVariant2[P, S]{
 		UserID: jp.userID,
 		X3G:    jp.X1G,
 		X4G:    jp.X2G,
@@ -427,7 +251,7 @@ func (jp *JPake3Pass[P]) GetPass2Message(msg Pass1Message[P]) (*Pass2Message[P],
 	return &pass2Msg, nil
 }
 
-func (jp *JPake3Pass[P]) GetPass3Message(msg Pass2Message[P]) (*Pass3Message[P], error) {
+func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*ThreePassVariant3[P, S], error) {
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
@@ -463,7 +287,7 @@ func (jp *JPake3Pass[P]) GetPass3Message(msg Pass2Message[P]) (*Pass3Message[P],
 		return nil, err
 	}
 
-	pass3Msg := Pass3Message[P]{
+	pass3Msg := ThreePassVariant3[P, S]{
 		A:     a,
 		XsZKP: xsZKP,
 	}
@@ -473,7 +297,7 @@ func (jp *JPake3Pass[P]) GetPass3Message(msg Pass2Message[P]) (*Pass3Message[P],
 	return &pass3Msg, nil
 }
 
-func (jp *JPake3Pass[P]) ProcessPass3Message(msg Pass3Message[P]) error {
+func (jp *ThreePassJpake[P, S]) ProcessPass3Message(msg ThreePassVariant3[P, S]) error {
 	// validate ZKPs
 	tmp1 := jp.curve.NewPoint().Add(jp.X1G, jp.X2G)
 	zkpGenerator := tmp1.Add(tmp1, jp.Otherx1G)
@@ -489,25 +313,25 @@ func (jp *JPake3Pass[P]) ProcessPass3Message(msg Pass3Message[P]) error {
 	return nil
 }
 
-func (jp *JPake3Pass[P]) SessionConfirmation1() []byte {
+func (jp *ThreePassJpake[P, S]) SessionConfirmation1() []byte {
 	return jp.sessionConfirmation(true)
 }
 
-func (jp *JPake3Pass[P]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
+func (jp *ThreePassJpake[P, S]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
 	if !bytes.Equal(confirm1, jp.sessionConfirmation(true)) {
 		return nil, errors.New("cannot confirm session")
 	}
 	return jp.sessionConfirmation(false), nil
 }
 
-func (jp *JPake3Pass[P]) ProcessSessionConfirmation2(confirm2 []byte) error {
+func (jp *ThreePassJpake[P, S]) ProcessSessionConfirmation2(confirm2 []byte) error {
 	if !bytes.Equal(confirm2, jp.sessionConfirmation(false)) {
 		return errors.New("cannot confirm session")
 	}
 	return nil
 }
 
-func (jp *JPake3Pass[P]) computeSharedKey(p P) error {
+func (jp *ThreePassJpake[P, S]) computeSharedKey(p P) error {
 	// compute either
 	// (B - (G4 x [x2*s])) x [x2]
 	// (A - (G2 x [x4*s])) x [x4]
@@ -528,7 +352,7 @@ func (jp *JPake3Pass[P]) computeSharedKey(p P) error {
 	return nil
 }
 
-func (jp *JPake3Pass[P]) sessionConfirmation(second bool) []byte {
+func (jp *ThreePassJpake[P, S]) sessionConfirmation(second bool) []byte {
 	v := append(jp.sessionKey[:], jp.sessionConfirmationBytes...)
 	h := jp.hashFn(jp.kdf(v))
 	if second {
