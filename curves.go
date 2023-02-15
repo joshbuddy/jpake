@@ -85,7 +85,10 @@ func (c Curve25519Curve) NewScalarFromSecret(b []byte) (*Curve25519scalar, error
 	// TODO: check if i is 0
 
 	scalar := (*Curve25519scalar)(edwards25519.NewScalar())
-	scalar.SetBigInt(i)
+	_, err := scalar.SetBigInt(i)
+	if err != nil {
+		return nil, err
+	}
 	return scalar, nil
 }
 
