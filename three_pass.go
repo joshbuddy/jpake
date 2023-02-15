@@ -98,6 +98,31 @@ func InitThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]]
 	return jp, err
 }
 
+func RestoreThreePassJpake(userID, sessionConfirmationBytes, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return RestoreThreePassJpakeWithCurveAndHashFns[*Curve25519Point, *Curve25519Scalar](userID, sessionConfirmationBytes, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
+}
+
+func RestoreThreePassJpakeWithCurve[P CurvePoint[P, S], S CurveScalar[S]](userID, sessionConfirmationBytes, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S]) (*ThreePassJpake[P, S], error) {
+	return RestoreThreePassJpakeWithCurveAndHashFns(userID, sessionConfirmationBytes, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, curve, sha256HashFn, hmacsha256KDF)
+}
+
+func RestoreThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]](userID, sessionConfirmationBytes, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], hashFn HashFnType, kdf KDFType) (*ThreePassJpake[P, S], error) {
+	jp := new(ThreePassJpake[P, S])
+	jp.userID = userID
+	jp.sessionConfirmationBytes = sessionConfirmationBytes
+	jp.OtherUserID = otherUserID
+	jp.SessionKey = sessionKey
+	jp.X1 = x1
+	jp.X2 = x2
+	jp.S = s
+	jp.OtherX1G = otherX1G
+	jp.OtherX2G = otherX2G
+	if err := jp.initWithCurveAndHashFns(curve, hashFn, kdf); err != nil {
+		return jp, err
+	}
+	return jp, nil
+}
+
 func (jp *ThreePassJpake[P, S]) initWithCurveAndHashFns(curve Curve[P, S], hashFn HashFnType, kdf KDFType) error {
 	jp.curve = curve
 	jp.hashFn = hashFn
