@@ -63,8 +63,8 @@ type ThreePassJpake[P CurvePoint[P, S], S CurveScalar[S]] struct {
 
 // curve25519Curve{curve[curvePoint[curve25519point]]}
 
-func InitThreePassJpake(userID, pw, sessionConfirmationBytes []byte) (*ThreePassJpake[*Curve25519point, *Curve25519scalar], error) {
-	return InitThreePassJpakeWithCurveAndHashFns[*Curve25519point, *Curve25519scalar](userID, pw, sessionConfirmationBytes, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
+func InitThreePassJpake(userID, pw, sessionConfirmationBytes []byte) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return InitThreePassJpakeWithCurveAndHashFns[*Curve25519Point, *Curve25519Scalar](userID, pw, sessionConfirmationBytes, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
 }
 
 func InitThreePassJpakeWithCurve[P CurvePoint[P, S], S CurveScalar[S]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P, S]) (*ThreePassJpake[P, S], error) {
