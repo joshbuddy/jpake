@@ -40,8 +40,8 @@ func TestJpake3Pass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
 	}
-	if !bytes.Equal(jpake1.sessionKey, jpake2.sessionKey) {
-		t.Fatalf("expected session keys to be equal %x %x", jpake1.sessionKey, jpake2.sessionKey)
+	if !bytes.Equal(jpake1.SessionKey, jpake2.SessionKey) {
+		t.Fatalf("expected session keys to be equal %x %x", jpake1.SessionKey, jpake2.SessionKey)
 	}
 }
 
@@ -71,8 +71,8 @@ func TestJpake3PassDifferentPasswords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
 	}
-	if bytes.Equal(jpake1.sessionKey, jpake2.sessionKey) {
-		t.Fatalf("expected session keys to not be equal %x %x", jpake1.sessionKey, jpake2.sessionKey)
+	if bytes.Equal(jpake1.SessionKey, jpake2.SessionKey) {
+		t.Fatalf("expected session keys to not be equal %x %x", jpake1.SessionKey, jpake2.SessionKey)
 	}
 }
 
@@ -107,8 +107,8 @@ func TestJpake3PassDifferentConfirmation(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error")
 	}
-	if !bytes.Equal(jpake1.sessionKey, jpake2.sessionKey) {
-		t.Fatalf("expected session keys to be equal %x %x", jpake1.sessionKey, jpake2.sessionKey)
+	if !bytes.Equal(jpake1.SessionKey, jpake2.SessionKey) {
+		t.Fatalf("expected session keys to be equal %x %x", jpake1.SessionKey, jpake2.SessionKey)
 	}
 }
 func TestJpake3PassSameUserIDs(t *testing.T) {

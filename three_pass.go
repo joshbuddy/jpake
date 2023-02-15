@@ -32,27 +32,27 @@ type ThreePassVariant3[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	XsZKP ZKPMsg[P, S]
 }
 
-// three pass variant jpake
-// https://tools.ietf.org/html/rfc8236#section-4
+// Three pass variant jpake https://tools.ietf.org/html/rfc8236#section-4
+// If serializing/deserializing, get/set all exported members
 type ThreePassJpake[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	// Variables which can be shared
-	X1G    P
-	X2G    P
+	x1G    P
+	x2G    P
 	userID []byte
 
-	// Received Variables, if restoring this, these are the only values you need to set
-	Otherx1G    P
-	Otherx2G    P
+	// Received Variables
+	OtherX1G    P
+	OtherX2G    P
 	OtherUserID []byte
 
 	// Calculated values
 	x2s        S
-	sessionKey []byte
+	SessionKey []byte
 
 	// Private Variables
-	x1 S
-	x2 S
-	s  S
+	X1 S
+	X2 S
+	S  S
 
 	// configuration
 	sessionConfirmationBytes []byte
@@ -73,7 +73,7 @@ func InitThreePassJpakeWithCurve[P CurvePoint[P, S], S CurveScalar[S]](userID, p
 
 func InitThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P, S], hashFn HashFnType, kdf KDFType) (*ThreePassJpake[P, S], error) {
 	jp := new(ThreePassJpake[P, S])
-	jp.sessionKey = []byte{} // make sure to invalidate the session key
+	jp.SessionKey = []byte{} // make sure to invalidate the session key
 	jp.userID = userID
 	jp.sessionConfirmationBytes = sessionConfirmationBytes
 	// Generate private random variables
@@ -85,10 +85,10 @@ func InitThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]]
 	if err != nil {
 		return nil, err
 	}
-	jp.x1 = rand1
-	jp.x2 = rand2
+	jp.X1 = rand1
+	jp.X2 = rand2
 	// Compute a simple hash of our secret
-	jp.s, err = curve.NewScalarFromSecret(hashFn(pw))
+	jp.S, err = curve.NewScalarFromSecret(hashFn(pw))
 	if err != nil {
 		return jp, err
 	}
@@ -103,18 +103,18 @@ func (jp *ThreePassJpake[P, S]) initWithCurveAndHashFns(curve Curve[P, S], hashF
 	jp.hashFn = hashFn
 	jp.kdf = kdf
 
-	p1, err := jp.curve.NewPoint().ScalarBaseMult(jp.x1)
+	p1, err := jp.curve.NewPoint().ScalarBaseMult(jp.X1)
 	if err != nil {
 		return err
 	}
-	jp.X1G = p1
-	p2, err := jp.curve.NewPoint().ScalarBaseMult(jp.x2)
+	jp.x1G = p1
+	p2, err := jp.curve.NewPoint().ScalarBaseMult(jp.X2)
 	if err != nil {
 		return err
 	}
-	jp.X2G = p2
+	jp.x2G = p2
 
-	jp.x2s, err = jp.curve.NewScalar().Multiply(jp.x2, jp.s)
+	jp.x2s, err = jp.curve.NewScalar().Multiply(jp.X2, jp.S)
 	if err != nil {
 		return err
 	}
@@ -193,19 +193,19 @@ func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bo
 }
 
 func (jp *ThreePassJpake[P, S]) Pass1Message() (*ThreePassVariant1[P, S], error) {
-	x1ZKP, err := jp.computeZKP(jp.x1, jp.curve.NewGeneratorPoint(), jp.X1G)
+	x1ZKP, err := jp.computeZKP(jp.X1, jp.curve.NewGeneratorPoint(), jp.x1G)
 	if err != nil {
 		return nil, err
 	}
-	x2ZKP, err := jp.computeZKP(jp.x2, jp.curve.NewGeneratorPoint(), jp.X2G)
+	x2ZKP, err := jp.computeZKP(jp.X2, jp.curve.NewGeneratorPoint(), jp.x2G)
 	if err != nil {
 		return nil, err
 	}
 
 	pass1Message := ThreePassVariant1[P, S]{
 		UserID: jp.userID,
-		X1G:    jp.X1G,
-		X2G:    jp.X2G,
+		X1G:    jp.x1G,
+		X2G:    jp.x2G,
 		X1ZKP:  x1ZKP,
 		X2ZKP:  x2ZKP,
 	}
@@ -225,20 +225,20 @@ func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*T
 		return nil, errors.New("could not verify the validity of the received message")
 	}
 
-	jp.Otherx1G = msg.X1G
-	jp.Otherx2G = msg.X2G
+	jp.OtherX1G = msg.X1G
+	jp.OtherX2G = msg.X2G
 
-	x3ZKP, err := jp.computeZKP(jp.x1, jp.curve.NewGeneratorPoint(), jp.X1G)
+	x3ZKP, err := jp.computeZKP(jp.X1, jp.curve.NewGeneratorPoint(), jp.x1G)
 	if err != nil {
 		return nil, err
 	}
-	x4ZKP, err := jp.computeZKP(jp.x2, jp.curve.NewGeneratorPoint(), jp.X2G)
+	x4ZKP, err := jp.computeZKP(jp.X2, jp.curve.NewGeneratorPoint(), jp.x2G)
 	if err != nil {
 		return nil, err
 	}
 
 	// new zkp generator is (G1 + G3 + G4)
-	generator := jp.curve.NewPoint().Add(jp.X1G, msg.X1G)
+	generator := jp.curve.NewPoint().Add(jp.x1G, msg.X1G)
 	generator = generator.Add(generator, msg.X2G)
 	// B = (G1 + G2 + G3) x [x4*s]
 	b, err := jp.curve.NewPoint().ScalarMult(generator, jp.x2s)
@@ -252,8 +252,8 @@ func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*T
 
 	pass2Msg := ThreePassVariant2[P, S]{
 		UserID: jp.userID,
-		X3G:    jp.X1G,
-		X4G:    jp.X2G,
+		X3G:    jp.x1G,
+		X4G:    jp.x2G,
 		B:      b,
 		X3ZKP:  x3ZKP,
 		X4ZKP:  x4ZKP,
@@ -269,7 +269,7 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 	jp.OtherUserID = msg.UserID
 	// validate ZKPs
 	// new zkp generator is (G1 + G2 + G3)
-	zkpGenerator := jp.curve.NewPoint().Add(jp.X1G, jp.X2G)
+	zkpGenerator := jp.curve.NewPoint().Add(jp.x1G, jp.x2G)
 	zkpGenerator = zkpGenerator.Add(zkpGenerator, msg.X3G)
 	x3Proof := jp.checkZKP(msg.X3ZKP, jp.curve.NewGeneratorPoint(), msg.X3G)
 	x4Proof := jp.checkZKP(msg.X4ZKP, jp.curve.NewGeneratorPoint(), msg.X4G)
@@ -279,12 +279,12 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 		return nil, errors.New("could not verify the validity of the received message")
 	}
 
-	jp.Otherx1G = msg.X3G
-	jp.Otherx2G = msg.X4G
+	jp.OtherX1G = msg.X3G
+	jp.OtherX2G = msg.X4G
 
 	// A = (G1 + G3 + G4) x [x2*s]
-	generator := jp.curve.NewPoint().Add(jp.X1G, jp.Otherx1G)
-	generator = generator.Add(generator, jp.Otherx2G)
+	generator := jp.curve.NewPoint().Add(jp.x1G, jp.OtherX1G)
+	generator = generator.Add(generator, jp.OtherX2G)
 
 	a, err := jp.curve.NewPoint().ScalarMult(generator, jp.x2s)
 	if err != nil {
@@ -310,8 +310,8 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 
 func (jp *ThreePassJpake[P, S]) ProcessPass3Message(msg ThreePassVariant3[P, S]) error {
 	// validate ZKPs
-	tmp1 := jp.curve.NewPoint().Add(jp.X1G, jp.X2G)
-	zkpGenerator := tmp1.Add(tmp1, jp.Otherx1G)
+	tmp1 := jp.curve.NewPoint().Add(jp.x1G, jp.x2G)
+	zkpGenerator := tmp1.Add(tmp1, jp.OtherX1G)
 	xsProof := jp.checkZKP(msg.XsZKP, zkpGenerator, msg.A)
 
 	if !xsProof {
@@ -346,7 +346,7 @@ func (jp *ThreePassJpake[P, S]) computeSharedKey(p P) error {
 	// compute either
 	// (B - (G4 x [x2*s])) x [x2]
 	// (A - (G2 x [x4*s])) x [x4]
-	otherx2gX2s, err := jp.curve.NewPoint().ScalarMult(jp.Otherx2G, jp.x2s)
+	otherx2gX2s, err := jp.curve.NewPoint().ScalarMult(jp.OtherX2G, jp.x2s)
 	if err != nil {
 		return err
 	}
@@ -354,17 +354,17 @@ func (jp *ThreePassJpake[P, S]) computeSharedKey(p P) error {
 	// A - (G2 x [x4*s])
 	k := jp.curve.NewPoint().Subtract(p, otherx2gX2s)
 	// Kb = (A - (G2 x [x4*s])) x [x4]
-	if _, err = k.ScalarMult(k, jp.x2); err != nil {
+	if _, err = k.ScalarMult(k, jp.X2); err != nil {
 		return err
 	}
 
 	sharedKey := jp.kdf(k.Bytes())
-	jp.sessionKey = sharedKey
+	jp.SessionKey = sharedKey
 	return nil
 }
 
 func (jp *ThreePassJpake[P, S]) sessionConfirmation(second bool) []byte {
-	v := append(jp.sessionKey[:], jp.sessionConfirmationBytes...)
+	v := append(jp.SessionKey[:], jp.sessionConfirmationBytes...)
 	h := jp.hashFn(jp.kdf(v))
 	if second {
 		h = jp.hashFn(h)
