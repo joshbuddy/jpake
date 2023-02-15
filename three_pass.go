@@ -152,11 +152,18 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 	xint := x.BigInt()
 	rIntermediate := vint.Sub(vint, new(big.Int).Mul(c, xint))
 	r := rIntermediate.Mod(rIntermediate, jp.curve.Params().N)
-
+	rS, err := jp.curve.NewScalar().SetBigInt(r)
+	if err != nil {
+		return ZKPMsg[P, S]{}, err
+	}
+	cS, err := jp.curve.NewScalar().SetBigInt(c)
+	if err != nil {
+		return ZKPMsg[P, S]{}, err
+	}
 	return ZKPMsg[P, S]{
 		T: t,
-		R: jp.curve.NewScalar().SetBigInt(r),
-		C: jp.curve.NewScalar().SetBigInt(c),
+		R: rS,
+		C: cS,
 	}, err
 }
 
@@ -173,7 +180,11 @@ func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bo
 	if err != nil {
 		return false
 	}
-	tmp2, err := jp.curve.NewPoint().ScalarMult(y, jp.curve.NewScalar().SetBigInt(c))
+	cS, err := jp.curve.NewScalar().SetBigInt(c)
+	if err != nil {
+		return false
+	}
+	tmp2, err := jp.curve.NewPoint().ScalarMult(y, cS)
 	if err != nil {
 		return false
 	}

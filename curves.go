@@ -23,7 +23,7 @@ type CurvePoint[P any, S any] interface {
 }
 
 type CurveScalar[S any] interface {
-	SetBigInt(*big.Int) S
+	SetBigInt(*big.Int) (S, error)
 	BigInt() *big.Int
 	Multiply(S, S) (S, error)
 	Bytes() []byte
@@ -141,14 +141,17 @@ func (s *Curve25519scalar) BigInt() *big.Int {
 	return new(big.Int).SetBytes(b[:])
 }
 
-func (s *Curve25519scalar) SetBigInt(i *big.Int) *Curve25519scalar {
+func (s *Curve25519scalar) SetBigInt(i *big.Int) (*Curve25519scalar, error) {
 	b := make([]byte, 32)
 	i.FillBytes(b)
 	for j := 0; j < 16; j++ {
 		b[j], b[32-j-1] = b[32-j-1], b[j]
 	}
-	(*edwards25519.Scalar)(s).SetCanonicalBytes(b)
-	return s
+	_, err := (*edwards25519.Scalar)(s).SetCanonicalBytes(b)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 func (s *Curve25519scalar) Multiply(t *Curve25519scalar, u *Curve25519scalar) (*Curve25519scalar, error) {
