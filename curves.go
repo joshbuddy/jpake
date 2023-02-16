@@ -2,7 +2,6 @@ package jpake
 
 import (
 	crypto_rand "crypto/rand"
-	"io"
 	"math/big"
 
 	"filippo.io/edwards25519"
@@ -33,8 +32,8 @@ type CurveScalar[S any] interface {
 type Curve[P CurvePoint[P, S], S CurveScalar[S]] interface {
 	Params() *CurveParams
 	NewGeneratorPoint() P
-	NewRandomScalar() (S, error)
-	NewScalarFromSecret([]byte) (S, error)
+	NewRandomScalar(int) (S, error)
+	NewScalarFromSecret(int, []byte) (S, error)
 	NewPoint() P
 	NewScalar() S
 }
@@ -66,30 +65,26 @@ func (c Curve25519Curve) NewScalar() *Curve25519Scalar {
 	return (*Curve25519Scalar)(edwards25519.NewScalar())
 }
 
-func (c Curve25519Curve) NewRandomScalar() (*Curve25519Scalar, error) {
-	s := [64]byte{}
-	_, err := io.ReadFull(crypto_rand.Reader, s[:])
+func (c Curve25519Curve) NewRandomScalar(l int) (*Curve25519Scalar, error) {
+	lower := new(big.Int).SetInt64(int64(l))
+	upper := new(big.Int).Set(c.Params().N)
+	upper.Sub(upper, lower)
+	n, err := crypto_rand.Int(crypto_rand.Reader, upper)
 	if err != nil {
 		return nil, err
 	}
-	scalar := edwards25519.NewScalar()
-	if _, err := scalar.SetUniformBytes(s[:]); err != nil {
-		return nil, err
-	}
-	return (*Curve25519Scalar)(scalar), nil
+	n.Add(n, lower)
+	return c.NewScalar().SetBigInt(n)
 }
 
-func (c Curve25519Curve) NewScalarFromSecret(b []byte) (*Curve25519Scalar, error) {
-	i := new(big.Int).SetBytes(b)
-	i.Mod(i, c.Params().N)
-	// TODO: check if i is 0
-
-	scalar := (*Curve25519Scalar)(edwards25519.NewScalar())
-	_, err := scalar.SetBigInt(i)
-	if err != nil {
-		return nil, err
-	}
-	return scalar, nil
+func (c Curve25519Curve) NewScalarFromSecret(l int, b []byte) (*Curve25519Scalar, error) {
+	lower := new(big.Int).SetInt64(int64(l))
+	upper := new(big.Int).Set(c.Params().N)
+	upper.Sub(upper, lower)
+	n := new(big.Int).SetBytes(b)
+	n.Mod(n, upper)
+	n.Add(n, lower)
+	return c.NewScalar().SetBigInt(n)
 }
 
 func (c Curve25519Curve) MultiplyScalar(a, b []byte) ([]byte, error) {

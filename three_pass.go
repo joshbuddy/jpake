@@ -77,18 +77,18 @@ func InitThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]]
 	jp.userID = userID
 	jp.sessionConfirmationBytes = sessionConfirmationBytes
 	// Generate private random variables
-	rand1, err := curve.NewRandomScalar()
+	rand1, err := curve.NewRandomScalar(1)
 	if err != nil {
 		return nil, err
 	}
-	rand2, err := curve.NewRandomScalar()
+	rand2, err := curve.NewRandomScalar(1)
 	if err != nil {
 		return nil, err
 	}
 	jp.X1 = rand1
 	jp.X2 = rand2
 	// Compute a simple hash of our secret
-	jp.S, err = curve.NewScalarFromSecret(hashFn(pw))
+	jp.S, err = curve.NewScalarFromSecret(1, hashFn(pw)) // The value of s falls within [1, n-1].
 	if err != nil {
 		return jp, err
 	}
@@ -154,7 +154,7 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 	// Generator used to compute the ZKP
 
 	// 1. Pick a random v \in Z_q* and compute t = vG
-	v, err := jp.curve.NewRandomScalar()
+	v, err := jp.curve.NewRandomScalar(1)
 	if err != nil {
 		return ZKPMsg[P, S]{}, err
 	}
@@ -169,7 +169,7 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 	chal = append(chal, y.Bytes()[:]...)
 	chal = append(chal, jp.userID...)
 	c := (new(big.Int).SetBytes(jp.hashFn(chal)))
-	c = c.Mod(c, jp.curve.Params().N)
+	c.Mod(c, jp.curve.Params().N)
 
 	// Need to store the result of Mul(c,x) in a new pointer as we need c later,
 	// but we don't need to do the same for v because we don't use it afterwards
