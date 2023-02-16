@@ -1,5 +1,7 @@
 # J-PAKE
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/joshbuddy/jpake.svg)](https://pkg.go.dev/github.com/joshbuddy/jpake)
+
 This implements https://www.rfc-editor.org/rfc/rfc8236 for go using ECC. Currently only the
 [three-pass variant](https://www.rfc-editor.org/rfc/rfc8236#section-4) is implemented.
 The interface allows for passing in any EC that conforms to `jpake.Curve[P CurvePoint[P]]` interface.
