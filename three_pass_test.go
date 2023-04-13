@@ -113,7 +113,7 @@ func TestJpake3PassDifferentConfirmation(t *testing.T) {
 		t.Fatalf("expected session keys to be equal %x %x", jpake1.SessionKey, jpake2.SessionKey)
 	}
 }
-func TestJpake3PassSameUserIDs(t *testing.T) {
+func TestJpake3PassSameUserIDsPass2(t *testing.T) {
 	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
@@ -128,6 +128,31 @@ func TestJpake3PassSameUserIDs(t *testing.T) {
 		t.Fatalf("init jpake: %v", err)
 	}
 	_, err = jpake2.GetPass2Message(*msg1)
+	if err == nil && err.Error() != "could not verify the validity of the received message" {
+		t.Fatalf("init jpake: %v", err)
+	}
+}
+
+func TestJpake3PassSameUserIDsPass3(t *testing.T) {
+	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+
+	msg1, err := jpake1.Pass1Message()
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg2, err := jpake2.GetPass2Message(*msg1)
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg2.UserID = []byte("one")
+	_, err = jpake1.GetPass3Message(*msg2)
 	if err == nil && err.Error() != "could not verify the validity of the received message" {
 		t.Fatalf("init jpake: %v", err)
 	}
