@@ -133,7 +133,7 @@ func TestJpake3PassSameUserIDs(t *testing.T) {
 	}
 }
 
-func TestJpake3PassWithInfinityPoint(t *testing.T) {
+func TestJpake3PassWithInfinityX1gPoint(t *testing.T) {
 	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
@@ -147,23 +147,123 @@ func TestJpake3PassWithInfinityPoint(t *testing.T) {
 		t.Fatalf("init jpake: %v", err)
 	}
 
-	//setting an uninitialized point as part of the protocol to mimic
-	//active attacker during jpake handshake
-	g1 := (*Curve25519Point)(edwards25519.NewGeneratorPoint())
-	zero_scalar := (*Curve25519Scalar)(edwards25519.NewScalar())
-	inf, err := g1.ScalarMult(g1, zero_scalar)
+	msg1.X1G = (*Curve25519Point)(edwards25519.NewIdentityPoint())
+
+	_, err = jpake2.GetPass2Message(*msg1)
+	if err == nil && err.Error() != "could not verify the validity of the received message" {
+		t.Fatalf("init jpake: %v", err)
+	}
+}
+
+func TestJpake3PassWithInfinityX2gPoint(t *testing.T) {
+	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg1, err := jpake1.Pass1Message()
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
 	}
 
-	g2 := (*Curve25519Point)(edwards25519.NewGeneratorPoint())
-	t_new, err := g2.ScalarMult(g2, msg1.X2ZKP.R)
+	msg1.X2G = (*Curve25519Point)(edwards25519.NewIdentityPoint())
+
+	_, err = jpake2.GetPass2Message(*msg1)
+	if err == nil && err.Error() != "could not verify the validity of the received message" {
+		t.Fatalf("init jpake: %v", err)
+	}
+}
+
+func TestJpake3PassWithInfinityX3gPoint(t *testing.T) {
+	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("init jpake: %v", err)
 	}
 
-	msg1.X2ZKP.T = (*Curve25519Point)(t_new)
-	msg1.X2G = (*Curve25519Point)(inf)
+	msg1, err := jpake1.Pass1Message()
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg2, err := jpake2.GetPass2Message(*msg1)
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg2.X3G = (*Curve25519Point)(edwards25519.NewIdentityPoint())
+	_, err = jpake1.GetPass3Message(*msg2)
+	if err == nil && err.Error() != "could not verify the validity of the received message" {
+		t.Fatalf("init jpake: %v", err)
+	}
+}
+
+func TestJpake3PassWithInfinityX4gPoint(t *testing.T) {
+	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+
+	msg1, err := jpake1.Pass1Message()
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg2, err := jpake2.GetPass2Message(*msg1)
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg2.X4G = (*Curve25519Point)(edwards25519.NewIdentityPoint())
+	_, err = jpake1.GetPass3Message(*msg2)
+	if err == nil && err.Error() != "could not verify the validity of the received message" {
+		t.Fatalf("init jpake: %v", err)
+	}
+}
+
+func TestJpake3PassWithInfinityTPoint(t *testing.T) {
+	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg1, err := jpake1.Pass1Message()
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+
+	msg1.X2ZKP.T = (*Curve25519Point)(edwards25519.NewIdentityPoint())
+
+	_, err = jpake2.GetPass2Message(*msg1)
+	if err == nil && err.Error() != "could not verify the validity of the received message" {
+		t.Fatalf("init jpake: %v", err)
+	}
+}
+
+func TestJpake3PassWithZeroR(t *testing.T) {
+	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+	msg1, err := jpake1.Pass1Message()
+	if err != nil {
+		t.Fatalf("init jpake: %v", err)
+	}
+
+	msg1.X2ZKP.R = (*Curve25519Scalar)(edwards25519.NewScalar())
 
 	_, err = jpake2.GetPass2Message(*msg1)
 	if err == nil && err.Error() != "could not verify the validity of the received message" {

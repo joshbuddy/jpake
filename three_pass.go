@@ -246,6 +246,10 @@ func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bo
 	if c.BitLen() == 0 {
 		return false
 	}
+	// validate T is not 0
+	if msgObj.T.Equal(jp.curve.NewPoint()) == 1 {
+		return false
+	}
 
 	// validate public key is not at infinity
 	if msgObj.R.BigInt().BitLen() == 0 {
