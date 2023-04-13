@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/binary"
 	"errors"
 	"math/big"
 )
@@ -196,9 +197,18 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 	}
 
 	// 2. Compute c = H(g, y, t) where H() is a cryptographic hash fn
-	chal := append(generator.Bytes(), t.Bytes()[:]...)
-	chal = append(chal, y.Bytes()[:]...)
+	//    Within the hash function, there must be a clear boundary between any two concatenated items.  It is RECOMMENDED that one should always prepend each item with a 4-byte integer that represents the byte length of that item.  OtherInfo may contain multiple subitems.  In that case, the same rule shall apply to ensure a clear boundary between adjacent subitems.
+
+	chal := []byte{}
+	binary.BigEndian.AppendUint32(chal, uint32(len(generator.Bytes())))
+	chal = append(chal, generator.Bytes()...)
+	binary.BigEndian.AppendUint32(chal, uint32(len(t.Bytes())))
+	chal = append(chal, t.Bytes()...)
+	binary.BigEndian.AppendUint32(chal, uint32(len(y.Bytes())))
+	chal = append(chal, y.Bytes()...)
+	binary.BigEndian.AppendUint32(chal, uint32(len(jp.userID)))
 	chal = append(chal, jp.userID...)
+
 	c := (new(big.Int).SetBytes(jp.config.hashFn(chal)))
 	c.Mod(c, jp.curve.Params().N)
 
@@ -212,22 +222,23 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 	if err != nil {
 		return ZKPMsg[P, S]{}, err
 	}
-	cS, err := jp.curve.NewScalar().SetBigInt(c)
-	if err != nil {
-		return ZKPMsg[P, S]{}, err
-	}
 	return ZKPMsg[P, S]{
 		T: t,
 		R: rS,
-		C: cS,
 	}, err
 }
 
 func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bool {
-	chal := generator.Bytes()
-	chal = append(chal, msgObj.T.Bytes()[:]...)
-	chal = append(chal, y.Bytes()[:]...)
+	chal := []byte{}
+	binary.BigEndian.AppendUint32(chal, uint32(len(generator.Bytes())))
+	chal = append(chal, generator.Bytes()...)
+	binary.BigEndian.AppendUint32(chal, uint32(len(msgObj.T.Bytes())))
+	chal = append(chal, msgObj.T.Bytes()...)
+	binary.BigEndian.AppendUint32(chal, uint32(len(y.Bytes())))
+	chal = append(chal, y.Bytes()...)
+	binary.BigEndian.AppendUint32(chal, uint32(len(jp.OtherUserID)))
 	chal = append(chal, jp.OtherUserID...)
+
 	c := (new(big.Int).SetBytes(jp.config.hashFn(chal)))
 	c = c.Mod(c, jp.curve.Params().N)
 	// TODO: ensure c is not 0 (i think)
