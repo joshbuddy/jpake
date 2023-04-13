@@ -1,7 +1,6 @@
 package jpake
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -422,14 +421,14 @@ func (jp *ThreePassJpake[P, S]) SessionConfirmation1() []byte {
 }
 
 func (jp *ThreePassJpake[P, S]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
-	if !bytes.Equal(confirm1, jp.sessionConfirmation(true)) {
+	if subtle.ConstantTimeCompare(confirm1, jp.sessionConfirmation(true)) != 1 {
 		return nil, errors.New("cannot confirm session")
 	}
 	return jp.sessionConfirmation(false), nil
 }
 
 func (jp *ThreePassJpake[P, S]) ProcessSessionConfirmation2(confirm2 []byte) error {
-	if !bytes.Equal(confirm2, jp.sessionConfirmation(false)) {
+	if subtle.ConstantTimeCompare(confirm2, jp.sessionConfirmation(false)) != 1 {
 		return errors.New("cannot confirm session")
 	}
 	return nil
