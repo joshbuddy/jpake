@@ -241,7 +241,10 @@ func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bo
 
 	c := (new(big.Int).SetBytes(jp.config.hashFn(chal)))
 	c = c.Mod(c, jp.curve.Params().N)
-	// TODO: ensure c is not 0 (i think)
+	// if c is zero
+	if c.BitLen() == 0 {
+		return false
+	}
 
 	vcheck, err := jp.curve.NewPoint().ScalarMult(generator, msgObj.R)
 	if err != nil {
