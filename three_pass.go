@@ -141,6 +141,22 @@ func RestoreThreePassJpakeWithConfig(userID, otherUserID, sessionKey []byte, x1,
 }
 
 func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S]](userID, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], config *Config) (*ThreePassJpake[P, S], error) {
+	if curve.Infinity(otherX1G) {
+		return nil, errors.New("otherx1g cannot be at infinity")
+	}
+	if curve.Infinity(otherX2G) {
+		return nil, errors.New("otherx2g cannot be at infinity")
+	}
+	if x1.Zero() {
+		return nil, errors.New("x1 cannot be at zero")
+	}
+	if x2.Zero() {
+		return nil, errors.New("x2 cannot be at zero")
+	}
+	if s.Zero() {
+		return nil, errors.New("s cannot be at zero")
+	}
+
 	jp := new(ThreePassJpake[P, S])
 	jp.userID = userID
 	jp.OtherUserID = otherUserID
@@ -245,13 +261,13 @@ func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bo
 	if c.BitLen() == 0 {
 		return false
 	}
-	// validate T is not 0
-	if msgObj.T.Equal(jp.curve.NewPoint()) == 1 {
+	// validate T is not infinity
+	if jp.curve.Infinity(msgObj.T) {
 		return false
 	}
 
 	// validate public key is not at infinity
-	if msgObj.R.BigInt().BitLen() == 0 {
+	if msgObj.R.Zero() {
 		return false
 	}
 
@@ -295,10 +311,10 @@ func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*T
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
-	if msg.X1G.Equal(jp.curve.NewPoint()) == 1 {
+	if jp.curve.Infinity(msg.X1G) {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
-	if msg.X2G.Equal(jp.curve.NewPoint()) == 1 {
+	if jp.curve.Infinity(msg.X2G) {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
 
@@ -352,17 +368,22 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
-	if msg.X3G.Equal(jp.curve.NewPoint()) == 1 {
+	if jp.curve.Infinity(msg.X3G) {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
-	if msg.X4G.Equal(jp.curve.NewPoint()) == 1 {
+	if jp.curve.Infinity(msg.X4G) {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
+
 	jp.OtherUserID = msg.UserID
 	// validate ZKPs
 	// new zkp generator is (G1 + G2 + G3)
 	zkpGenerator := jp.curve.NewPoint().Add(jp.x1G, jp.x2G)
 	zkpGenerator = zkpGenerator.Add(zkpGenerator, msg.X3G)
+	if jp.curve.Infinity(zkpGenerator) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
+
 	x3Proof := jp.checkZKP(msg.X3ZKP, jp.curve.NewGeneratorPoint(), msg.X3G)
 	x4Proof := jp.checkZKP(msg.X4ZKP, jp.curve.NewGeneratorPoint(), msg.X4G)
 	xsProof := jp.checkZKP(msg.XsZKP, zkpGenerator, msg.B)
@@ -377,14 +398,14 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 	// A = (G1 + G3 + G4) x [x2*s]
 	generator := jp.curve.NewPoint().Add(jp.x1G, jp.OtherX1G)
 	generator = generator.Add(generator, jp.OtherX2G)
+	if jp.curve.Infinity(generator) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
 
 	a, err := jp.curve.NewPoint().ScalarMult(generator, jp.x2s)
 	if err != nil {
 		return nil, err
 	}
-	// if _, err := a.ScalarMult(a, jp.s); err != nil {
-	// 	return nil, err
-	// }
 	xsZKP, err := jp.computeZKP(jp.x2s, generator, a)
 	if err != nil {
 		return nil, err

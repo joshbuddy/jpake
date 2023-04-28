@@ -27,6 +27,7 @@ type CurveScalar[S any] interface {
 	Multiply(S, S) (S, error)
 	Bytes() []byte
 	SetBytes(b []byte) (S, error)
+	Zero() bool
 }
 
 type Curve[P CurvePoint[P, S], S CurveScalar[S]] interface {
@@ -36,6 +37,7 @@ type Curve[P CurvePoint[P, S], S CurveScalar[S]] interface {
 	NewScalarFromSecret(int, []byte) (S, error)
 	NewPoint() P
 	NewScalar() S
+	Infinity(P) bool
 }
 
 var Curve25519Params = &CurveParams{
@@ -98,6 +100,10 @@ func (c Curve25519Curve) MultiplyScalar(a, b []byte) ([]byte, error) {
 	}
 	sa.Multiply(sa, sb)
 	return sa.Bytes(), nil
+}
+
+func (c Curve25519Curve) Infinity(p *Curve25519Point) bool {
+	return p.Equal(c.NewPoint()) == 1
 }
 
 func (p *Curve25519Point) Add(r1, r2 *Curve25519Point) *Curve25519Point {
@@ -163,4 +169,8 @@ func (s *Curve25519Scalar) SetBytes(b []byte) (*Curve25519Scalar, error) {
 
 func (s *Curve25519Scalar) Bytes() []byte {
 	return ((*edwards25519.Scalar)(s).Bytes())
+}
+
+func (s *Curve25519Scalar) Zero() bool {
+	return s.BigInt().BitLen() == 0
 }
