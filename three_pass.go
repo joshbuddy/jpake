@@ -9,6 +9,15 @@ import (
 	"math/big"
 )
 
+func concat(parts ...[]byte) []byte {
+	msg := []byte{}
+	for _, m := range parts {
+		msg = binary.BigEndian.AppendUint64(msg, uint64(len(m)))
+		msg = append(msg, m...)
+	}
+	return msg
+}
+
 type ThreePassVariant1[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	UserID []byte
 	X1G    P
@@ -66,6 +75,7 @@ type Config struct {
 	hashFn                   HashFnType
 	secretKdf                HashFnType
 	sessionKeyKdf            HashFnType
+	confirmationMac          MacFnType
 }
 
 func NewConfig() *Config {
@@ -74,6 +84,7 @@ func NewConfig() *Config {
 		hashFn:                   sha256HashFn,
 		secretKdf:                func(s []byte) []byte { return hmacsha256KDF(s, []byte("SECRET")) },
 		sessionKeyKdf:            func(s []byte) []byte { return hmacsha256KDF(s, []byte("SESSION")) },
+		confirmationMac:          func(s, msg []byte) []byte { return hmacsha256KDF(s, msg) },
 	}
 }
 
@@ -94,6 +105,11 @@ func (c *Config) SetSecretKdf(h HashFnType) *Config {
 
 func (c *Config) SetSessionKeyKdf(h HashFnType) *Config {
 	c.sessionKeyKdf = h
+	return c
+}
+
+func (c *Config) SetConfirmationMac(m MacFnType) *Config {
+	c.confirmationMac = m
 	return c
 }
 
@@ -214,16 +230,7 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 	// 2. Compute c = H(g, y, t) where H() is a cryptographic hash fn
 	//    Within the hash function, there must be a clear boundary between any two concatenated items.  It is RECOMMENDED that one should always prepend each item with a 4-byte integer that represents the byte length of that item.  OtherInfo may contain multiple subitems.  In that case, the same rule shall apply to ensure a clear boundary between adjacent subitems.
 
-	chal := []byte{}
-	binary.BigEndian.AppendUint32(chal, uint32(len(generator.Bytes())))
-	chal = append(chal, generator.Bytes()...)
-	binary.BigEndian.AppendUint32(chal, uint32(len(t.Bytes())))
-	chal = append(chal, t.Bytes()...)
-	binary.BigEndian.AppendUint32(chal, uint32(len(y.Bytes())))
-	chal = append(chal, y.Bytes()...)
-	binary.BigEndian.AppendUint32(chal, uint32(len(jp.userID)))
-	chal = append(chal, jp.userID...)
-
+	chal := concat(generator.Bytes(), t.Bytes(), y.Bytes(), jp.userID)
 	c := (new(big.Int).SetBytes(jp.config.hashFn(chal)))
 	c.Mod(c, jp.curve.Params().N)
 
@@ -244,16 +251,7 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 }
 
 func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bool {
-	chal := []byte{}
-	binary.BigEndian.AppendUint32(chal, uint32(len(generator.Bytes())))
-	chal = append(chal, generator.Bytes()...)
-	binary.BigEndian.AppendUint32(chal, uint32(len(msgObj.T.Bytes())))
-	chal = append(chal, msgObj.T.Bytes()...)
-	binary.BigEndian.AppendUint32(chal, uint32(len(y.Bytes())))
-	chal = append(chal, y.Bytes()...)
-	binary.BigEndian.AppendUint32(chal, uint32(len(jp.OtherUserID)))
-	chal = append(chal, jp.OtherUserID...)
-
+	chal := concat(generator.Bytes(), msgObj.T.Bytes(), y.Bytes(), jp.OtherUserID)
 	c := (new(big.Int).SetBytes(jp.config.hashFn(chal)))
 	c = c.Mod(c, jp.curve.Params().N)
 
@@ -438,18 +436,25 @@ func (jp *ThreePassJpake[P, S]) ProcessPass3Message(msg ThreePassVariant3[P, S])
 }
 
 func (jp *ThreePassJpake[P, S]) SessionConfirmation1() []byte {
-	return jp.sessionConfirmation(true)
+	// MAC(k', "KC_1_U" || Alice || Bob || G1 || G2 || G3 || G4)
+	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
+	return jp.config.confirmationMac(jp.sessionConfirmationKey(), msg)
 }
 
 func (jp *ThreePassJpake[P, S]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
-	if subtle.ConstantTimeCompare(confirm1, jp.sessionConfirmation(true)) != 1 {
+	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
+
+	if subtle.ConstantTimeCompare(confirm1, jp.config.confirmationMac(jp.sessionConfirmationKey(), expectedMsg)) != 1 {
 		return nil, errors.New("cannot confirm session")
 	}
-	return jp.sessionConfirmation(false), nil
+	// MAC(k', "KC_1_U" || Bob || Alice || G3 || G4 || G1 || G2)
+	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
+	return jp.config.confirmationMac(jp.sessionConfirmationKey(), msg), nil
 }
 
 func (jp *ThreePassJpake[P, S]) ProcessSessionConfirmation2(confirm2 []byte) error {
-	if subtle.ConstantTimeCompare(confirm2, jp.sessionConfirmation(false)) != 1 {
+	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
+	if subtle.ConstantTimeCompare(confirm2, jp.config.confirmationMac(jp.sessionConfirmationKey(), expectedMsg)) != 1 {
 		return errors.New("cannot confirm session")
 	}
 	return nil
@@ -475,13 +480,9 @@ func (jp *ThreePassJpake[P, S]) computeSharedKey(p P) error {
 	return nil
 }
 
-func (jp *ThreePassJpake[P, S]) sessionConfirmation(second bool) []byte {
+func (jp *ThreePassJpake[P, S]) sessionConfirmationKey() []byte {
 	v := append(jp.SessionKey[:], jp.config.sessionConfirmationBytes...)
-	h := jp.config.hashFn(v)
-	if second {
-		h = jp.config.hashFn(h)
-	}
-	return h
+	return jp.config.hashFn(v)
 }
 
 func sha256HashFn(in []byte) []byte {

@@ -28,7 +28,7 @@ defer func() {
 }()
 ```
 
-For key confirmation, the procedure outlined in the rfc based on the SPEKE protocol is implemented.
+For key confirmation, the procedure outlined in the rfc based on [NIST SP 800-56A Revision 1](http://csrc.nist.gov/publications/nistpubs/800-56A/SP800-56A_Revision1_Mar08-2007.pdf) is implemented.
 
 This code is currently unaudited and should not be used in a production setting without a full audit.
 
