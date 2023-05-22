@@ -1,13 +1,22 @@
 package jpake
 
 import (
-	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/binary"
 	"errors"
 	"math/big"
 )
+
+func concat(parts ...[]byte) []byte {
+	msg := []byte{}
+	for _, m := range parts {
+		msg = binary.BigEndian.AppendUint64(msg, uint64(len(m)))
+		msg = append(msg, m...)
+	}
+	return msg
+}
 
 type ThreePassVariant1[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	UserID []byte
@@ -55,27 +64,68 @@ type ThreePassJpake[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	S  S
 
 	// configuration
-	sessionConfirmationBytes []byte
-	hashFn                   HashFnType
-	kdf                      KDFType
-	curve                    Curve[P, S]
+	config *Config
+	curve  Curve[P, S]
 }
 
 // curve25519Curve{curve[curvePoint[curve25519point]]}
 
-func InitThreePassJpake(userID, pw, sessionConfirmationBytes []byte) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
-	return InitThreePassJpakeWithCurveAndHashFns[*Curve25519Point, *Curve25519Scalar](userID, pw, sessionConfirmationBytes, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
+type Config struct {
+	sessionConfirmationBytes []byte
+	hashFn                   HashFnType
+	secretKdf                HashFnType
+	sessionKeyKdf            HashFnType
+	confirmationMac          MacFnType
 }
 
-func InitThreePassJpakeWithCurve[P CurvePoint[P, S], S CurveScalar[S]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P, S]) (*ThreePassJpake[P, S], error) {
-	return InitThreePassJpakeWithCurveAndHashFns(userID, pw, sessionConfirmationBytes, curve, sha256HashFn, hmacsha256KDF)
+func NewConfig() *Config {
+	return &Config{
+		sessionConfirmationBytes: []byte("JPAKE_CONFIRM"),
+		hashFn:                   sha256HashFn,
+		secretKdf:                func(s []byte) []byte { return hmacsha256KDF(s, []byte("SECRET")) },
+		sessionKeyKdf:            func(s []byte) []byte { return hmacsha256KDF(s, []byte("SESSION")) },
+		confirmationMac:          func(s, msg []byte) []byte { return hmacsha256KDF(s, msg) },
+	}
 }
 
-func InitThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]](userID, pw, sessionConfirmationBytes []byte, curve Curve[P, S], hashFn HashFnType, kdf KDFType) (*ThreePassJpake[P, S], error) {
+func (c *Config) SetSessionConfirmationBytes(scb []byte) *Config {
+	c.sessionConfirmationBytes = scb
+	return c
+}
+
+func (c *Config) SetHashFn(h HashFnType) *Config {
+	c.hashFn = h
+	return c
+}
+
+func (c *Config) SetSecretKdf(h HashFnType) *Config {
+	c.secretKdf = h
+	return c
+}
+
+func (c *Config) SetSessionKeyKdf(h HashFnType) *Config {
+	c.sessionKeyKdf = h
+	return c
+}
+
+func (c *Config) SetConfirmationMac(m MacFnType) *Config {
+	c.confirmationMac = m
+	return c
+}
+
+func InitThreePassJpake(userID, pw []byte) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return InitThreePassJpakeWithConfig(userID, pw, NewConfig())
+}
+
+func InitThreePassJpakeWithConfig(userID, pw []byte, config *Config) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return InitThreePassJpakeWithConfigAndCurve[*Curve25519Point, *Curve25519Scalar](userID, pw, Curve25519Curve{}, config)
+}
+
+func InitThreePassJpakeWithConfigAndCurve[P CurvePoint[P, S], S CurveScalar[S]](userID, pw []byte, curve Curve[P, S], config *Config) (*ThreePassJpake[P, S], error) {
 	jp := new(ThreePassJpake[P, S])
 	jp.SessionKey = []byte{} // make sure to invalidate the session key
 	jp.userID = userID
-	jp.sessionConfirmationBytes = sessionConfirmationBytes
+	jp.config = config
 	// Generate private random variables
 	rand1, err := curve.NewRandomScalar(1)
 	if err != nil {
@@ -88,28 +138,43 @@ func InitThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]]
 	jp.X1 = rand1
 	jp.X2 = rand2
 	// Compute a simple hash of our secret
-	jp.S, err = curve.NewScalarFromSecret(1, hashFn(pw)) // The value of s falls within [1, n-1].
+	jp.S, err = curve.NewScalarFromSecret(1, config.hashFn(config.secretKdf(pw))) // The value of s falls within [1, n-1].
 	if err != nil {
 		return jp, err
 	}
-	if err := jp.initWithCurveAndHashFns(curve, hashFn, kdf); err != nil {
+	if err := jp.initWithCurve(curve); err != nil {
 		return jp, err
 	}
 	return jp, err
 }
 
-func RestoreThreePassJpake(userID, sessionConfirmationBytes, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
-	return RestoreThreePassJpakeWithCurveAndHashFns[*Curve25519Point, *Curve25519Scalar](userID, sessionConfirmationBytes, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, Curve25519Curve{}, sha256HashFn, hmacsha256KDF)
+func RestoreThreePassJpake(userID, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return RestoreThreePassJpakeWithConfig(userID, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, NewConfig())
 }
 
-func RestoreThreePassJpakeWithCurve[P CurvePoint[P, S], S CurveScalar[S]](userID, sessionConfirmationBytes, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S]) (*ThreePassJpake[P, S], error) {
-	return RestoreThreePassJpakeWithCurveAndHashFns(userID, sessionConfirmationBytes, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, curve, sha256HashFn, hmacsha256KDF)
+func RestoreThreePassJpakeWithConfig(userID, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point, config *Config) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return RestoreThreePassJpakeWithCurveAndConfig[*Curve25519Point, *Curve25519Scalar](userID, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, Curve25519Curve{}, config)
 }
 
-func RestoreThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[S]](userID, sessionConfirmationBytes, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], hashFn HashFnType, kdf KDFType) (*ThreePassJpake[P, S], error) {
+func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S]](userID, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], config *Config) (*ThreePassJpake[P, S], error) {
+	if curve.Infinity(otherX1G) {
+		return nil, errors.New("otherx1g cannot be at infinity")
+	}
+	if curve.Infinity(otherX2G) {
+		return nil, errors.New("otherx2g cannot be at infinity")
+	}
+	if x1.Zero() {
+		return nil, errors.New("x1 cannot be at zero")
+	}
+	if x2.Zero() {
+		return nil, errors.New("x2 cannot be at zero")
+	}
+	if s.Zero() {
+		return nil, errors.New("s cannot be at zero")
+	}
+
 	jp := new(ThreePassJpake[P, S])
 	jp.userID = userID
-	jp.sessionConfirmationBytes = sessionConfirmationBytes
 	jp.OtherUserID = otherUserID
 	jp.SessionKey = sessionKey
 	jp.X1 = x1
@@ -117,16 +182,14 @@ func RestoreThreePassJpakeWithCurveAndHashFns[P CurvePoint[P, S], S CurveScalar[
 	jp.S = s
 	jp.OtherX1G = otherX1G
 	jp.OtherX2G = otherX2G
-	if err := jp.initWithCurveAndHashFns(curve, hashFn, kdf); err != nil {
+	if err := jp.initWithCurve(curve); err != nil {
 		return jp, err
 	}
 	return jp, nil
 }
 
-func (jp *ThreePassJpake[P, S]) initWithCurveAndHashFns(curve Curve[P, S], hashFn HashFnType, kdf KDFType) error {
+func (jp *ThreePassJpake[P, S]) initWithCurve(curve Curve[P, S]) error {
 	jp.curve = curve
-	jp.hashFn = hashFn
-	jp.kdf = kdf
 
 	p1, err := jp.curve.NewPoint().ScalarBaseMult(jp.X1)
 	if err != nil {
@@ -165,10 +228,10 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 	}
 
 	// 2. Compute c = H(g, y, t) where H() is a cryptographic hash fn
-	chal := append(generator.Bytes(), t.Bytes()[:]...)
-	chal = append(chal, y.Bytes()[:]...)
-	chal = append(chal, jp.userID...)
-	c := (new(big.Int).SetBytes(jp.hashFn(chal)))
+	//    Within the hash function, there must be a clear boundary between any two concatenated items.  It is RECOMMENDED that one should always prepend each item with a 4-byte integer that represents the byte length of that item.  OtherInfo may contain multiple subitems.  In that case, the same rule shall apply to ensure a clear boundary between adjacent subitems.
+
+	chal := concat(generator.Bytes(), t.Bytes(), y.Bytes(), jp.userID)
+	c := (new(big.Int).SetBytes(jp.config.hashFn(chal)))
 	c.Mod(c, jp.curve.Params().N)
 
 	// Need to store the result of Mul(c,x) in a new pointer as we need c later,
@@ -181,25 +244,30 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 	if err != nil {
 		return ZKPMsg[P, S]{}, err
 	}
-	cS, err := jp.curve.NewScalar().SetBigInt(c)
-	if err != nil {
-		return ZKPMsg[P, S]{}, err
-	}
 	return ZKPMsg[P, S]{
 		T: t,
 		R: rS,
-		C: cS,
 	}, err
 }
 
 func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bool {
-	chal := generator.Bytes()
-	chal = append(chal, msgObj.T.Bytes()[:]...)
-	chal = append(chal, y.Bytes()[:]...)
-	chal = append(chal, jp.OtherUserID...)
-	c := (new(big.Int).SetBytes(jp.hashFn(chal)))
+	chal := concat(generator.Bytes(), msgObj.T.Bytes(), y.Bytes(), jp.OtherUserID)
+	c := (new(big.Int).SetBytes(jp.config.hashFn(chal)))
 	c = c.Mod(c, jp.curve.Params().N)
-	// TODO: ensure c is not 0 (i think)
+
+	// if c is zero
+	if c.BitLen() == 0 {
+		return false
+	}
+	// validate T is not infinity
+	if jp.curve.Infinity(msgObj.T) {
+		return false
+	}
+
+	// validate public key is not at infinity
+	if msgObj.R.Zero() {
+		return false
+	}
 
 	vcheck, err := jp.curve.NewPoint().ScalarMult(generator, msgObj.R)
 	if err != nil {
@@ -241,6 +309,13 @@ func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*T
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
+	if jp.curve.Infinity(msg.X1G) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
+	if jp.curve.Infinity(msg.X2G) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
+
 	// validate ZKPs
 	jp.OtherUserID = msg.UserID
 
@@ -291,11 +366,22 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
+	if jp.curve.Infinity(msg.X3G) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
+	if jp.curve.Infinity(msg.X4G) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
+
 	jp.OtherUserID = msg.UserID
 	// validate ZKPs
 	// new zkp generator is (G1 + G2 + G3)
 	zkpGenerator := jp.curve.NewPoint().Add(jp.x1G, jp.x2G)
 	zkpGenerator = zkpGenerator.Add(zkpGenerator, msg.X3G)
+	if jp.curve.Infinity(zkpGenerator) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
+
 	x3Proof := jp.checkZKP(msg.X3ZKP, jp.curve.NewGeneratorPoint(), msg.X3G)
 	x4Proof := jp.checkZKP(msg.X4ZKP, jp.curve.NewGeneratorPoint(), msg.X4G)
 	xsProof := jp.checkZKP(msg.XsZKP, zkpGenerator, msg.B)
@@ -310,14 +396,14 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 	// A = (G1 + G3 + G4) x [x2*s]
 	generator := jp.curve.NewPoint().Add(jp.x1G, jp.OtherX1G)
 	generator = generator.Add(generator, jp.OtherX2G)
+	if jp.curve.Infinity(generator) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
 
 	a, err := jp.curve.NewPoint().ScalarMult(generator, jp.x2s)
 	if err != nil {
 		return nil, err
 	}
-	// if _, err := a.ScalarMult(a, jp.s); err != nil {
-	// 	return nil, err
-	// }
 	xsZKP, err := jp.computeZKP(jp.x2s, generator, a)
 	if err != nil {
 		return nil, err
@@ -350,18 +436,25 @@ func (jp *ThreePassJpake[P, S]) ProcessPass3Message(msg ThreePassVariant3[P, S])
 }
 
 func (jp *ThreePassJpake[P, S]) SessionConfirmation1() []byte {
-	return jp.sessionConfirmation(true)
+	// MAC(k', "KC_1_U" || Alice || Bob || G1 || G2 || G3 || G4)
+	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
+	return jp.config.confirmationMac(jp.sessionConfirmationKey(), msg)
 }
 
 func (jp *ThreePassJpake[P, S]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
-	if !bytes.Equal(confirm1, jp.sessionConfirmation(true)) {
+	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
+
+	if subtle.ConstantTimeCompare(confirm1, jp.config.confirmationMac(jp.sessionConfirmationKey(), expectedMsg)) != 1 {
 		return nil, errors.New("cannot confirm session")
 	}
-	return jp.sessionConfirmation(false), nil
+	// MAC(k', "KC_1_U" || Bob || Alice || G3 || G4 || G1 || G2)
+	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
+	return jp.config.confirmationMac(jp.sessionConfirmationKey(), msg), nil
 }
 
 func (jp *ThreePassJpake[P, S]) ProcessSessionConfirmation2(confirm2 []byte) error {
-	if !bytes.Equal(confirm2, jp.sessionConfirmation(false)) {
+	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
+	if subtle.ConstantTimeCompare(confirm2, jp.config.confirmationMac(jp.sessionConfirmationKey(), expectedMsg)) != 1 {
 		return errors.New("cannot confirm session")
 	}
 	return nil
@@ -383,18 +476,13 @@ func (jp *ThreePassJpake[P, S]) computeSharedKey(p P) error {
 		return err
 	}
 
-	sharedKey := jp.kdf(k.Bytes())
-	jp.SessionKey = sharedKey
+	jp.SessionKey = jp.config.sessionKeyKdf(k.Bytes())
 	return nil
 }
 
-func (jp *ThreePassJpake[P, S]) sessionConfirmation(second bool) []byte {
-	v := append(jp.SessionKey[:], jp.sessionConfirmationBytes...)
-	h := jp.hashFn(jp.kdf(v))
-	if second {
-		h = jp.hashFn(h)
-	}
-	return h
+func (jp *ThreePassJpake[P, S]) sessionConfirmationKey() []byte {
+	v := append(jp.SessionKey[:], jp.config.sessionConfirmationBytes...)
+	return jp.config.hashFn(v)
 }
 
 func sha256HashFn(in []byte) []byte {
@@ -402,9 +490,8 @@ func sha256HashFn(in []byte) []byte {
 	return hash[:]
 }
 
-func hmacsha256KDF(input []byte) []byte {
-	kdfSecret := []byte("JPAKE_KEY")
-	return hmacsha256(input, kdfSecret)
+func hmacsha256KDF(input, key []byte) []byte {
+	return hmacsha256(input, key)
 }
 
 func hmacsha256(input []byte, key []byte) []byte {
