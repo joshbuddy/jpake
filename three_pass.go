@@ -157,12 +157,6 @@ func RestoreThreePassJpakeWithConfig(userID, otherUserID, sessionKey []byte, x1,
 }
 
 func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S]](userID, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], config *Config) (*ThreePassJpake[P, S], error) {
-	if curve.Infinity(otherX1G) {
-		return nil, errors.New("otherx1g cannot be at infinity")
-	}
-	if curve.Infinity(otherX2G) {
-		return nil, errors.New("otherx2g cannot be at infinity")
-	}
 	if x1.Zero() {
 		return nil, errors.New("x1 cannot be at zero")
 	}
