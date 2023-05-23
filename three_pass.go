@@ -148,15 +148,15 @@ func InitThreePassJpakeWithConfigAndCurve[P CurvePoint[P, S], S CurveScalar[S]](
 	return jp, err
 }
 
-func RestoreThreePassJpake(userID, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
-	return RestoreThreePassJpakeWithConfig(userID, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, NewConfig())
+func RestoreThreePassJpake(userID, otherUserID []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return RestoreThreePassJpakeWithConfig(userID, otherUserID, x1, x2, s, otherX1G, otherX2G, NewConfig())
 }
 
-func RestoreThreePassJpakeWithConfig(userID, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point, config *Config) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
-	return RestoreThreePassJpakeWithCurveAndConfig[*Curve25519Point, *Curve25519Scalar](userID, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, Curve25519Curve{}, config)
+func RestoreThreePassJpakeWithConfig(userID, otherUserID []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point, config *Config) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return RestoreThreePassJpakeWithCurveAndConfig[*Curve25519Point, *Curve25519Scalar](userID, otherUserID, x1, x2, s, otherX1G, otherX2G, Curve25519Curve{}, config)
 }
 
-func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S]](userID, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], config *Config) (*ThreePassJpake[P, S], error) {
+func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S]](userID, otherUserID []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], config *Config) (*ThreePassJpake[P, S], error) {
 	if x1.Zero() {
 		return nil, errors.New("x1 cannot be at zero")
 	}
@@ -170,12 +170,12 @@ func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S
 	jp := new(ThreePassJpake[P, S])
 	jp.userID = userID
 	jp.OtherUserID = otherUserID
-	jp.SessionKey = sessionKey
 	jp.X1 = x1
 	jp.X2 = x2
 	jp.S = s
 	jp.OtherX1G = otherX1G
 	jp.OtherX2G = otherX2G
+	jp.config = config
 	if err := jp.initWithCurve(curve); err != nil {
 		return jp, err
 	}

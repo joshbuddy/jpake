@@ -316,3 +316,50 @@ func TestJpake3PassWithZeroR(t *testing.T) {
 		t.Fatalf("expected 'could not verify the validity of the received message' error, instead got: %v", err)
 	}
 }
+
+func TestJpake3Restore(t *testing.T) {
+	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	if err != nil {
+		t.Fatalf("error init jpake1: %v", err)
+	}
+	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	if err != nil {
+		t.Fatalf("error init jpake2: %v", err)
+	}
+	msg1, err := jpake1.Pass1Message()
+	if err != nil {
+		t.Fatalf("error getting pass1: %v", err)
+	}
+	restoredJpake2, err := RestoreThreePassJpake([]byte("two"), jpake2.OtherUserID, jpake2.X1, jpake2.X2, jpake2.S, jpake2.OtherX1G, jpake2.OtherX2G)
+	if err != nil {
+		t.Fatalf("error restoring jpake2: %v", err)
+	}
+	msg2, err := restoredJpake2.GetPass2Message(*msg1)
+	if err != nil {
+		t.Fatalf("error getting pass2: %v", err)
+	}
+	restoredJpake1, err := RestoreThreePassJpake([]byte("one"), jpake1.OtherUserID, jpake1.X1, jpake1.X2, jpake1.S, jpake1.OtherX1G, jpake1.OtherX2G)
+	if err != nil {
+		t.Fatalf("error restoring jpake2: %v", err)
+	}
+	msg3, err := restoredJpake1.GetPass3Message(*msg2)
+	if err != nil {
+		t.Fatalf("error getting pass3: %v", err)
+	}
+	err = restoredJpake2.ProcessPass3Message(*msg3)
+	if err != nil {
+		t.Fatalf("error processing pass3: %v", err)
+	}
+	conf1 := restoredJpake1.SessionConfirmation1()
+	conf2, err := restoredJpake2.SessionConfirmation2(conf1)
+	if err != nil {
+		t.Fatalf("error getting conf2: %v", err)
+	}
+	err = restoredJpake1.ProcessSessionConfirmation2(conf2)
+	if err != nil {
+		t.Fatalf("error confirming conf2: %v", err)
+	}
+	if !bytes.Equal(restoredJpake1.SessionKey, restoredJpake2.SessionKey) {
+		t.Fatalf("expected session key %x to be equal to %x", restoredJpake1.SessionKey, restoredJpake2.SessionKey)
+	}
+}
