@@ -330,7 +330,7 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass1: %v", err)
 	}
-	restoredJpake2, err := RestoreThreePassJpake([]byte("two"), jpake2.OtherUserID, jpake2.X1, jpake2.X2, jpake2.S, jpake2.OtherX1G, jpake2.OtherX2G)
+	restoredJpake2, err := RestoreThreePassJpake([]byte("two"), jpake2.OtherUserID, jpake2.SessionKey, jpake2.X1, jpake2.X2, jpake2.S, jpake2.OtherX1G, jpake2.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass2: %v", err)
 	}
-	restoredJpake1, err := RestoreThreePassJpake([]byte("one"), jpake1.OtherUserID, jpake1.X1, jpake1.X2, jpake1.S, jpake1.OtherX1G, jpake1.OtherX2G)
+	restoredJpake1, err := RestoreThreePassJpake([]byte("one"), jpake1.OtherUserID, jpake1.SessionKey, jpake1.X1, jpake1.X2, jpake1.S, jpake1.OtherX1G, jpake1.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
@@ -346,14 +346,30 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass3: %v", err)
 	}
+	restoredJpake2, err = RestoreThreePassJpake([]byte("two"), restoredJpake2.OtherUserID, restoredJpake2.SessionKey, restoredJpake2.X1, restoredJpake2.X2, restoredJpake2.S, restoredJpake2.OtherX1G, restoredJpake2.OtherX2G)
+	if err != nil {
+		t.Fatalf("error restoring jpake2: %v", err)
+	}
 	err = restoredJpake2.ProcessPass3Message(*msg3)
 	if err != nil {
 		t.Fatalf("error processing pass3: %v", err)
 	}
+	restoredJpake1, err = RestoreThreePassJpake([]byte("one"), restoredJpake1.OtherUserID, restoredJpake1.SessionKey, restoredJpake1.X1, restoredJpake1.X2, restoredJpake1.S, restoredJpake1.OtherX1G, restoredJpake1.OtherX2G)
+	if err != nil {
+		t.Fatalf("error restoring jpake2: %v", err)
+	}
 	conf1 := restoredJpake1.SessionConfirmation1()
+	restoredJpake2, err = RestoreThreePassJpake([]byte("two"), restoredJpake2.OtherUserID, restoredJpake2.SessionKey, restoredJpake2.X1, restoredJpake2.X2, restoredJpake2.S, restoredJpake2.OtherX1G, restoredJpake2.OtherX2G)
+	if err != nil {
+		t.Fatalf("error restoring jpake2: %v", err)
+	}
 	conf2, err := restoredJpake2.SessionConfirmation2(conf1)
 	if err != nil {
 		t.Fatalf("error getting conf2: %v", err)
+	}
+	restoredJpake1, err = RestoreThreePassJpake([]byte("one"), restoredJpake1.OtherUserID, restoredJpake1.SessionKey, restoredJpake1.X1, restoredJpake1.X2, restoredJpake1.S, restoredJpake1.OtherX1G, restoredJpake1.OtherX2G)
+	if err != nil {
+		t.Fatalf("error restoring jpake2: %v", err)
 	}
 	err = restoredJpake1.ProcessSessionConfirmation2(conf2)
 	if err != nil {
