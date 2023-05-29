@@ -220,7 +220,18 @@ func (jp *ThreePassJpake[P, S]) computeZKP(x S, generator P, y P) (ZKPMsg[P, S],
 }
 
 func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bool {
+	if jp.curve.Infinity(generator) {
+		return false
+	}
 	if jp.curve.Infinity(y) {
+		return false
+	}
+	// validate T is not infinity
+	if jp.curve.Infinity(msgObj.T) {
+		return false
+	}
+	// validate R is not zero
+	if msgObj.R.Zero() {
 		return false
 	}
 
@@ -230,15 +241,6 @@ func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bo
 
 	// if c is zero
 	if c.BitLen() == 0 {
-		return false
-	}
-	// validate T is not infinity
-	if jp.curve.Infinity(msgObj.T) {
-		return false
-	}
-
-	// validate R is not zero
-	if msgObj.R.Zero() {
 		return false
 	}
 
@@ -354,10 +356,6 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 	// new zkp generator is (G1 + G2 + G3)
 	zkpGenerator := jp.curve.NewPoint().Add(jp.x1G, jp.x2G)
 	zkpGenerator = zkpGenerator.Add(zkpGenerator, msg.X3G)
-	if jp.curve.Infinity(zkpGenerator) {
-		return nil, errors.New("could not verify the validity of the received message")
-	}
-
 	x3Proof := jp.checkZKP(msg.X3ZKP, jp.curve.NewGeneratorPoint(), msg.X3G)
 	x4Proof := jp.checkZKP(msg.X4ZKP, jp.curve.NewGeneratorPoint(), msg.X4G)
 	xsProof := jp.checkZKP(msg.XsZKP, zkpGenerator, msg.B)
