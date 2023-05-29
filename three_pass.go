@@ -315,6 +315,10 @@ func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*T
 	// new zkp generator is (G1 + G3 + G4)
 	generator := jp.curve.NewPoint().Add(jp.x1G, msg.X1G)
 	generator = generator.Add(generator, msg.X2G)
+	if jp.curve.Infinity(generator) {
+		return nil, errors.New("could not verify the validity of the received message")
+	}
+
 	// B = (G1 + G2 + G3) x [x4*s]
 	b, err := jp.curve.NewPoint().ScalarMult(generator, jp.x2s)
 	if err != nil {
