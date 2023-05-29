@@ -72,19 +72,19 @@ type ThreePassJpake[P CurvePoint[P, S], S CurveScalar[S]] struct {
 
 type Config struct {
 	sessionConfirmationBytes []byte
+	secretGenerationBytes    []byte
+	sessionGenerationBytes   []byte
 	hashFn                   HashFnType
-	secretKdf                HashFnType
-	sessionKeyKdf            HashFnType
-	confirmationMac          MacFnType
+	macFn                    MacFnType
 }
 
 func NewConfig() *Config {
 	return &Config{
 		sessionConfirmationBytes: []byte("JPAKE_CONFIRM"),
+		secretGenerationBytes:    []byte("SECRET"),
+		sessionGenerationBytes:   []byte("SESSION"),
 		hashFn:                   sha256HashFn,
-		secretKdf:                func(s []byte) []byte { return hmacsha256KDF(s, []byte("SECRET")) },
-		sessionKeyKdf:            func(s []byte) []byte { return hmacsha256KDF(s, []byte("SESSION")) },
-		confirmationMac:          func(s, msg []byte) []byte { return hmacsha256KDF(s, msg) },
+		macFn:                    hmacsha256KDF,
 	}
 }
 
@@ -93,24 +93,36 @@ func (c *Config) SetSessionConfirmationBytes(scb []byte) *Config {
 	return c
 }
 
+func (c *Config) SetSecretGenerationBytes(s []byte) *Config {
+	c.secretGenerationBytes = s
+	return c
+}
+
+func (c *Config) SetSessionGenerationBytes(s []byte) *Config {
+	c.sessionGenerationBytes = s
+	return c
+}
+
 func (c *Config) SetHashFn(h HashFnType) *Config {
 	c.hashFn = h
 	return c
 }
 
-func (c *Config) SetSecretKdf(h HashFnType) *Config {
-	c.secretKdf = h
+func (c *Config) SetMacFn(f MacFnType) *Config {
+	c.macFn = f
 	return c
 }
 
-func (c *Config) SetSessionKeyKdf(h HashFnType) *Config {
-	c.sessionKeyKdf = h
-	return c
+func (c *Config) generateSecret(pw []byte) []byte {
+	return c.hashFn(c.macFn(pw, c.secretGenerationBytes))
 }
 
-func (c *Config) SetConfirmationMac(m MacFnType) *Config {
-	c.confirmationMac = m
-	return c
+func (c *Config) generateConfirmationMac(k, msg []byte) []byte {
+	return c.macFn(c.macFn(k, c.sessionConfirmationBytes), msg)
+}
+
+func (c *Config) generateSessionKey(k []byte) []byte {
+	return c.macFn(k, c.sessionGenerationBytes)
 }
 
 func InitThreePassJpake(userID, pw []byte) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
@@ -138,7 +150,7 @@ func InitThreePassJpakeWithConfigAndCurve[P CurvePoint[P, S], S CurveScalar[S]](
 	jp.X1 = rand1
 	jp.X2 = rand2
 	// Compute a simple hash of our secret
-	jp.S, err = curve.NewScalarFromSecret(1, config.hashFn(config.secretKdf(pw))) // The value of s falls within [1, n-1].
+	jp.S, err = curve.NewScalarFromSecret(1, config.generateSecret(pw)) // The value of s falls within [1, n-1].
 	if err != nil {
 		return jp, err
 	}
@@ -433,23 +445,23 @@ func (jp *ThreePassJpake[P, S]) ProcessPass3Message(msg ThreePassVariant3[P, S])
 func (jp *ThreePassJpake[P, S]) SessionConfirmation1() []byte {
 	// MAC(k', "KC_1_U" || Alice || Bob || G1 || G2 || G3 || G4)
 	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
-	return jp.config.confirmationMac(jp.sessionConfirmationKey(), msg)
+	return jp.config.generateConfirmationMac(jp.SessionKey[:], msg)
 }
 
 func (jp *ThreePassJpake[P, S]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
 	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
 
-	if subtle.ConstantTimeCompare(confirm1, jp.config.confirmationMac(jp.sessionConfirmationKey(), expectedMsg)) != 1 {
+	if subtle.ConstantTimeCompare(confirm1, jp.config.generateConfirmationMac(jp.SessionKey[:], expectedMsg)) != 1 {
 		return nil, errors.New("cannot confirm session")
 	}
 	// MAC(k', "KC_1_U" || Bob || Alice || G3 || G4 || G1 || G2)
 	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
-	return jp.config.confirmationMac(jp.sessionConfirmationKey(), msg), nil
+	return jp.config.generateConfirmationMac(jp.SessionKey[:], msg), nil
 }
 
 func (jp *ThreePassJpake[P, S]) ProcessSessionConfirmation2(confirm2 []byte) error {
 	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
-	if subtle.ConstantTimeCompare(confirm2, jp.config.confirmationMac(jp.sessionConfirmationKey(), expectedMsg)) != 1 {
+	if subtle.ConstantTimeCompare(confirm2, jp.config.generateConfirmationMac(jp.SessionKey[:], expectedMsg)) != 1 {
 		return errors.New("cannot confirm session")
 	}
 	return nil
@@ -471,13 +483,8 @@ func (jp *ThreePassJpake[P, S]) computeSharedKey(p P) error {
 		return err
 	}
 
-	jp.SessionKey = jp.config.sessionKeyKdf(k.Bytes())
+	jp.SessionKey = jp.config.generateSessionKey(k.Bytes())
 	return nil
-}
-
-func (jp *ThreePassJpake[P, S]) sessionConfirmationKey() []byte {
-	v := append(jp.SessionKey[:], jp.config.sessionConfirmationBytes...)
-	return jp.config.hashFn(v)
 }
 
 func sha256HashFn(in []byte) []byte {
