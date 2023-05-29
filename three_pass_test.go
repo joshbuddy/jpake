@@ -6,11 +6,11 @@ import (
 )
 
 func TestJpake3Pass(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -45,11 +45,11 @@ func TestJpake3Pass(t *testing.T) {
 }
 
 func TestJpake3PassDifferentPasswords(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password2"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password2"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -75,11 +75,11 @@ func TestJpake3PassDifferentPasswords(t *testing.T) {
 }
 
 func TestJpake3PassDifferentConfirmation1(t *testing.T) {
-	jpake1, err := InitThreePassJpakeWithConfig([]byte("one"), []byte("password"), NewConfig().SetSessionConfirmationBytes([]byte("CONFIRM1")))
+	jpake1, err := InitThreePassJpakeWithConfig(true, []byte("one"), []byte("password"), NewConfig().SetSessionConfirmationBytes([]byte("CONFIRM1")))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpakeWithConfig([]byte("two"), []byte("password"), NewConfig().SetSessionConfirmationBytes([]byte("CONFIRM2")))
+	jpake2, err := InitThreePassJpakeWithConfig(false, []byte("two"), []byte("password"), NewConfig().SetSessionConfirmationBytes([]byte("CONFIRM2")))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -110,11 +110,11 @@ func TestJpake3PassDifferentConfirmation1(t *testing.T) {
 }
 
 func TestJpake3PassDifferentConfirmation2(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -145,11 +145,11 @@ func TestJpake3PassDifferentConfirmation2(t *testing.T) {
 }
 
 func TestJpake3PassSameUserIDsPass2(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("one"), []byte("password2"))
+	jpake2, err := InitThreePassJpake(false, []byte("one"), []byte("password2"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -165,11 +165,11 @@ func TestJpake3PassSameUserIDsPass2(t *testing.T) {
 }
 
 func TestJpake3PassSameUserIDsPass3(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -189,11 +189,11 @@ func TestJpake3PassSameUserIDsPass3(t *testing.T) {
 }
 
 func TestJpake3PassWithInfinityX1gPoint(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -209,11 +209,11 @@ func TestJpake3PassWithInfinityX1gPoint(t *testing.T) {
 }
 
 func TestJpake3PassWithInfinityX2gPoint(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -229,11 +229,11 @@ func TestJpake3PassWithInfinityX2gPoint(t *testing.T) {
 }
 
 func TestJpake3PassWithInfinityX3gPoint(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -254,11 +254,11 @@ func TestJpake3PassWithInfinityX3gPoint(t *testing.T) {
 }
 
 func TestJpake3PassWithInfinityX4gPoint(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -278,11 +278,11 @@ func TestJpake3PassWithInfinityX4gPoint(t *testing.T) {
 }
 
 func TestJpake3PassWithInfinityTPoint(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -298,11 +298,11 @@ func TestJpake3PassWithInfinityTPoint(t *testing.T) {
 }
 
 func TestJpake3PassWithZeroR(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -318,11 +318,11 @@ func TestJpake3PassWithZeroR(t *testing.T) {
 }
 
 func TestJpake3Restore(t *testing.T) {
-	jpake1, err := InitThreePassJpake([]byte("one"), []byte("password"))
+	jpake1, err := InitThreePassJpake(true, []byte("one"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake1: %v", err)
 	}
-	jpake2, err := InitThreePassJpake([]byte("two"), []byte("password"))
+	jpake2, err := InitThreePassJpake(false, []byte("two"), []byte("password"))
 	if err != nil {
 		t.Fatalf("error init jpake2: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass1: %v", err)
 	}
-	restoredJpake2, err := RestoreThreePassJpake([]byte("two"), jpake2.OtherUserID, jpake2.SessionKey, jpake2.X1, jpake2.X2, jpake2.S, jpake2.OtherX1G, jpake2.OtherX2G)
+	restoredJpake2, err := RestoreThreePassJpake(jpake2.Phase, []byte("two"), jpake2.OtherUserID, jpake2.SessionKey, jpake2.X1, jpake2.X2, jpake2.S, jpake2.OtherX1G, jpake2.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
@@ -338,7 +338,7 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass2: %v", err)
 	}
-	restoredJpake1, err := RestoreThreePassJpake([]byte("one"), jpake1.OtherUserID, jpake1.SessionKey, jpake1.X1, jpake1.X2, jpake1.S, jpake1.OtherX1G, jpake1.OtherX2G)
+	restoredJpake1, err := RestoreThreePassJpake(jpake1.Phase, []byte("one"), jpake1.OtherUserID, jpake1.SessionKey, jpake1.X1, jpake1.X2, jpake1.S, jpake1.OtherX1G, jpake1.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
@@ -346,7 +346,7 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass3: %v", err)
 	}
-	restoredJpake2, err = RestoreThreePassJpake([]byte("two"), restoredJpake2.OtherUserID, restoredJpake2.SessionKey, restoredJpake2.X1, restoredJpake2.X2, restoredJpake2.S, restoredJpake2.OtherX1G, restoredJpake2.OtherX2G)
+	restoredJpake2, err = RestoreThreePassJpake(restoredJpake2.Phase, []byte("two"), restoredJpake2.OtherUserID, restoredJpake2.SessionKey, restoredJpake2.X1, restoredJpake2.X2, restoredJpake2.S, restoredJpake2.OtherX1G, restoredJpake2.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
@@ -354,12 +354,12 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error processing pass3: %v", err)
 	}
-	restoredJpake1, err = RestoreThreePassJpake([]byte("one"), restoredJpake1.OtherUserID, restoredJpake1.SessionKey, restoredJpake1.X1, restoredJpake1.X2, restoredJpake1.S, restoredJpake1.OtherX1G, restoredJpake1.OtherX2G)
+	restoredJpake1, err = RestoreThreePassJpake(restoredJpake1.Phase, []byte("one"), restoredJpake1.OtherUserID, restoredJpake1.SessionKey, restoredJpake1.X1, restoredJpake1.X2, restoredJpake1.S, restoredJpake1.OtherX1G, restoredJpake1.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
 	conf1 := restoredJpake1.SessionConfirmation1()
-	restoredJpake2, err = RestoreThreePassJpake([]byte("two"), restoredJpake2.OtherUserID, restoredJpake2.SessionKey, restoredJpake2.X1, restoredJpake2.X2, restoredJpake2.S, restoredJpake2.OtherX1G, restoredJpake2.OtherX2G)
+	restoredJpake2, err = RestoreThreePassJpake(restoredJpake2.Phase, []byte("two"), restoredJpake2.OtherUserID, restoredJpake2.SessionKey, restoredJpake2.X1, restoredJpake2.X2, restoredJpake2.S, restoredJpake2.OtherX1G, restoredJpake2.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting conf2: %v", err)
 	}
-	restoredJpake1, err = RestoreThreePassJpake([]byte("one"), restoredJpake1.OtherUserID, restoredJpake1.SessionKey, restoredJpake1.X1, restoredJpake1.X2, restoredJpake1.S, restoredJpake1.OtherX1G, restoredJpake1.OtherX2G)
+	restoredJpake1, err = RestoreThreePassJpake(restoredJpake1.Phase, []byte("one"), restoredJpake1.OtherUserID, restoredJpake1.SessionKey, restoredJpake1.X1, restoredJpake1.X2, restoredJpake1.S, restoredJpake1.OtherX1G, restoredJpake1.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
