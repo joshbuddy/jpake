@@ -392,49 +392,44 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 	return &pass3Msg, nil
 }
 
-func (jp *ThreePassJpake[P, S]) ProcessPass3Message(msg ThreePassVariant3[P, S]) error {
+func (jp *ThreePassJpake[P, S]) ProcessPass3Message(msg ThreePassVariant3[P, S]) ([]byte, error) {
 	if jp.Stage != 4 {
-		return fmt.Errorf("expected stage 4, was %d", jp.Stage)
+		return nil, fmt.Errorf("expected stage 4, was %d", jp.Stage)
 	}
 	// validate ZKPs
 	tmp1 := jp.curve.NewPoint().Add(jp.x1G, jp.x2G)
 	zkpGenerator := tmp1.Add(tmp1, jp.OtherX1G)
 	xsProof := jp.checkZKP(msg.XsZKP, zkpGenerator, msg.A)
 	if !xsProof {
-		return errors.New("could not verify the validity of the received message")
+		return nil, errors.New("could not verify the validity of the received message")
 	}
 	if err := jp.computeSharedKey(msg.A); err != nil {
-		return err
+		return nil, err
 	}
 	jp.Stage = 6
-	return nil
+	// MAC(k', "KC_1_U" || Alice || Bob || G1 || G2 || G3 || G4)
+	confirmMsg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
+	return jp.config.generateConfirmationMac(jp.SessionKey[:], confirmMsg), nil
 }
 
-func (jp *ThreePassJpake[P, S]) SessionConfirmation1() ([]byte, error) {
+func (jp *ThreePassJpake[P, S]) ProcessSessionConfirmation1(confirm1 []byte) ([]byte, error) {
 	if jp.Stage != 5 {
 		return nil, fmt.Errorf("expected stage 5, was %d", jp.Stage)
 	}
-	// MAC(k', "KC_1_U" || Alice || Bob || G1 || G2 || G3 || G4)
-	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
-	jp.Stage = 7
-	return jp.config.generateConfirmationMac(jp.SessionKey[:], msg), nil
-}
-
-func (jp *ThreePassJpake[P, S]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
-	if jp.Stage != 6 {
-		return nil, fmt.Errorf("expected stage 6, was %d", jp.Stage)
-	}
 	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
-
 	if subtle.ConstantTimeCompare(confirm1, jp.config.generateConfirmationMac(jp.SessionKey[:], expectedMsg)) != 1 {
 		return nil, errors.New("cannot confirm session")
 	}
 	// MAC(k', "KC_1_U" || Bob || Alice || G3 || G4 || G1 || G2)
+	jp.Stage = 7
 	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
 	return jp.config.generateConfirmationMac(jp.SessionKey[:], msg), nil
 }
 
 func (jp *ThreePassJpake[P, S]) ProcessSessionConfirmation2(confirm2 []byte) error {
+	if jp.Stage != 6 {
+		return fmt.Errorf("expected stage 6, was %d", jp.Stage)
+	}
 	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
 	if subtle.ConstantTimeCompare(confirm2, jp.config.generateConfirmationMac(jp.SessionKey[:], expectedMsg)) != 1 {
 		return errors.New("cannot confirm session")
