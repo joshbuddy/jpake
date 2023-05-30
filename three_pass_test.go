@@ -26,21 +26,16 @@ func TestJpake3Pass(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass3: %v", err)
 	}
-	err = jpake2.ProcessPass3Message(*msg3)
+	conf1, err := jpake2.ProcessPass3Message(*msg3)
 	if err != nil {
 		t.Fatalf("error processing pass3: %v", err)
 	}
-	conf1, err := jpake1.SessionConfirmation1()
+	conf2, err := jpake1.ProcessSessionConfirmation1(conf1)
 	if err != nil {
 		t.Fatalf("error getting conf1: %v", err)
 	}
-	conf2, err := jpake2.SessionConfirmation2(conf1)
-	if err != nil {
+	if err := jpake2.ProcessSessionConfirmation2(conf2); err != nil {
 		t.Fatalf("error getting conf2: %v", err)
-	}
-	err = jpake1.ProcessSessionConfirmation2(conf2)
-	if err != nil {
-		t.Fatalf("error confirming conf2: %v", err)
 	}
 	if !bytes.Equal(jpake1.SessionKey, jpake2.SessionKey) {
 		t.Fatalf("expected session key %x to be equal to %x", jpake1.SessionKey, jpake2.SessionKey)
@@ -68,8 +63,7 @@ func TestJpake3PassDifferentPasswords(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass3: %v", err)
 	}
-	err = jpake2.ProcessPass3Message(*msg3)
-	if err != nil {
+	if _, err := jpake2.ProcessPass3Message(*msg3); err != nil {
 		t.Fatalf("error processing pass3: %v", err)
 	}
 	if bytes.Equal(jpake1.SessionKey, jpake2.SessionKey) {
@@ -98,15 +92,11 @@ func TestJpake3PassDifferentConfirmation1(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass3: %v", err)
 	}
-	err = jpake2.ProcessPass3Message(*msg3)
+	conf1, err := jpake2.ProcessPass3Message(*msg3)
 	if err != nil {
 		t.Fatalf("error processing pass3: %v", err)
 	}
-	conf1, err := jpake1.SessionConfirmation1()
-	if err != nil {
-		t.Fatalf("expected error getting conf1, instead got nil")
-	}
-	_, err = jpake2.SessionConfirmation2(conf1)
+	_, err = jpake1.ProcessSessionConfirmation1(conf1)
 	if err == nil {
 		t.Fatalf("expected error getting conf2, instead got nil")
 	}
@@ -136,19 +126,14 @@ func TestJpake3PassDifferentConfirmation2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error getting pass3: %v", err)
 	}
-	err = jpake2.ProcessPass3Message(*msg3)
+	conf1, err := jpake2.ProcessPass3Message(*msg3)
 	if err != nil {
 		t.Fatalf("error processing pass3: %v", err)
 	}
-	conf1, err := jpake1.SessionConfirmation1()
-	if err != nil {
+	if _, err := jpake1.ProcessSessionConfirmation1(conf1); err != nil {
 		t.Fatalf("error getting conf1: %v", err)
 	}
-	if _, err := jpake2.SessionConfirmation2(conf1); err != nil {
-		t.Fatalf("error getting conf2: %v", err)
-	}
-	err = jpake1.ProcessSessionConfirmation2([]byte("an incorrect conf2"))
-	if err == nil {
+	if err := jpake2.ProcessSessionConfirmation2([]byte("an incorrect conf2")); err == nil {
 		t.Fatalf("expected error processing conf2, instead got nil")
 	}
 }
@@ -359,7 +344,7 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
-	err = restoredJpake2.ProcessPass3Message(*msg3)
+	conf1, err := restoredJpake2.ProcessPass3Message(*msg3)
 	if err != nil {
 		t.Fatalf("error processing pass3: %v", err)
 	}
@@ -367,23 +352,15 @@ func TestJpake3Restore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
-	conf1, err := restoredJpake1.SessionConfirmation1()
+	conf2, err := restoredJpake1.ProcessSessionConfirmation1(conf1)
 	if err != nil {
-		t.Fatalf("error getting conf1: %v", err)
+		t.Fatalf("error getting conf2: %v", err)
 	}
 	restoredJpake2, err = RestoreThreePassJpake(restoredJpake2.Stage, []byte("two"), restoredJpake2.OtherUserID, restoredJpake2.SessionKey, restoredJpake2.X1, restoredJpake2.X2, restoredJpake2.S, restoredJpake2.OtherX1G, restoredJpake2.OtherX2G)
 	if err != nil {
 		t.Fatalf("error restoring jpake2: %v", err)
 	}
-	conf2, err := restoredJpake2.SessionConfirmation2(conf1)
-	if err != nil {
-		t.Fatalf("error getting conf2: %v", err)
-	}
-	restoredJpake1, err = RestoreThreePassJpake(restoredJpake1.Stage, []byte("one"), restoredJpake1.OtherUserID, restoredJpake1.SessionKey, restoredJpake1.X1, restoredJpake1.X2, restoredJpake1.S, restoredJpake1.OtherX1G, restoredJpake1.OtherX2G)
-	if err != nil {
-		t.Fatalf("error restoring jpake2: %v", err)
-	}
-	err = restoredJpake1.ProcessSessionConfirmation2(conf2)
+	err = restoredJpake2.ProcessSessionConfirmation2(conf2)
 	if err != nil {
 		t.Fatalf("error confirming conf2: %v", err)
 	}
