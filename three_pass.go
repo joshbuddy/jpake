@@ -65,7 +65,7 @@ type ThreePassJpake[P CurvePoint[P, S], S CurveScalar[S]] struct {
 	S  S
 
 	// configuration
-	Phase  int
+	Stage  int
 	config *Config
 	curve  Curve[P, S]
 }
@@ -97,9 +97,9 @@ func InitThreePassJpakeWithConfigAndCurve[P CurvePoint[P, S], S CurveScalar[S]](
 	jp.X1 = rand1
 	jp.X2 = rand2
 	if initiator {
-		jp.Phase = 1
+		jp.Stage = 1
 	} else {
-		jp.Phase = 2
+		jp.Stage = 2
 	}
 	// Compute a simple hash of our secret
 	jp.S, err = curve.NewScalarFromSecret(1, config.generateSecret(pw)) // The value of s falls within [1, n-1].
@@ -112,15 +112,15 @@ func InitThreePassJpakeWithConfigAndCurve[P CurvePoint[P, S], S CurveScalar[S]](
 	return jp, err
 }
 
-func RestoreThreePassJpake(phase int, userID, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
-	return RestoreThreePassJpakeWithConfig(phase, userID, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, NewConfig())
+func RestoreThreePassJpake(stage int, userID, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return RestoreThreePassJpakeWithConfig(stage, userID, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, NewConfig())
 }
 
-func RestoreThreePassJpakeWithConfig(phase int, userID, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point, config *Config) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
-	return RestoreThreePassJpakeWithCurveAndConfig[*Curve25519Point, *Curve25519Scalar](phase, userID, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, Curve25519Curve{}, config)
+func RestoreThreePassJpakeWithConfig(stage int, userID, otherUserID, sessionKey []byte, x1, x2, s *Curve25519Scalar, otherX1G, otherX2G *Curve25519Point, config *Config) (*ThreePassJpake[*Curve25519Point, *Curve25519Scalar], error) {
+	return RestoreThreePassJpakeWithCurveAndConfig[*Curve25519Point, *Curve25519Scalar](stage, userID, otherUserID, sessionKey, x1, x2, s, otherX1G, otherX2G, Curve25519Curve{}, config)
 }
 
-func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S]](phase int, userID, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], config *Config) (*ThreePassJpake[P, S], error) {
+func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S]](stage int, userID, otherUserID, sessionKey []byte, x1, x2, s S, otherX1G, otherX2G P, curve Curve[P, S], config *Config) (*ThreePassJpake[P, S], error) {
 	if x1.Zero() {
 		return nil, errors.New("x1 cannot be at zero")
 	}
@@ -131,7 +131,7 @@ func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S
 		return nil, errors.New("s cannot be at zero")
 	}
 
-	if phase >= 4 {
+	if stage >= 4 {
 		if curve.Infinity(otherX1G) {
 			return nil, errors.New("otherx1g cannot be at infinity")
 		}
@@ -141,7 +141,7 @@ func RestoreThreePassJpakeWithCurveAndConfig[P CurvePoint[P, S], S CurveScalar[S
 	}
 
 	jp := new(ThreePassJpake[P, S])
-	jp.Phase = phase
+	jp.Stage = stage
 	jp.userID = userID
 	jp.OtherUserID = otherUserID
 	jp.SessionKey = sessionKey
@@ -261,8 +261,8 @@ func (jp *ThreePassJpake[P, S]) checkZKP(msgObj ZKPMsg[P, S], generator, y P) bo
 }
 
 func (jp *ThreePassJpake[P, S]) Pass1Message() (*ThreePassVariant1[P, S], error) {
-	if jp.Phase != 1 {
-		return nil, fmt.Errorf("expected phase 1, was %d", jp.Phase)
+	if jp.Stage != 1 {
+		return nil, fmt.Errorf("expected stage 1, was %d", jp.Stage)
 	}
 	x1ZKP, err := jp.computeZKP(jp.X1, jp.curve.NewGeneratorPoint(), jp.x1G)
 	if err != nil {
@@ -273,7 +273,7 @@ func (jp *ThreePassJpake[P, S]) Pass1Message() (*ThreePassVariant1[P, S], error)
 		return nil, err
 	}
 
-	jp.Phase = 3
+	jp.Stage = 3
 	pass1Message := ThreePassVariant1[P, S]{
 		UserID: jp.userID,
 		X1G:    jp.x1G,
@@ -285,8 +285,8 @@ func (jp *ThreePassJpake[P, S]) Pass1Message() (*ThreePassVariant1[P, S], error)
 }
 
 func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*ThreePassVariant2[P, S], error) {
-	if jp.Phase != 2 {
-		return nil, fmt.Errorf("expected phase 2, was %d", jp.Phase)
+	if jp.Stage != 2 {
+		return nil, fmt.Errorf("expected stage 2, was %d", jp.Stage)
 	}
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
@@ -303,7 +303,7 @@ func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*T
 
 	jp.OtherX1G = msg.X1G
 	jp.OtherX2G = msg.X2G
-	jp.Phase = 4
+	jp.Stage = 4
 
 	x3ZKP, err := jp.computeZKP(jp.X1, jp.curve.NewGeneratorPoint(), jp.x1G)
 	if err != nil {
@@ -344,8 +344,8 @@ func (jp *ThreePassJpake[P, S]) GetPass2Message(msg ThreePassVariant1[P, S]) (*T
 }
 
 func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*ThreePassVariant3[P, S], error) {
-	if jp.Phase != 3 {
-		return nil, fmt.Errorf("expected phase 3, was %d", jp.Phase)
+	if jp.Stage != 3 {
+		return nil, fmt.Errorf("expected stage 3, was %d", jp.Stage)
 	}
 	if subtle.ConstantTimeCompare(msg.UserID, jp.userID) == 1 {
 		return nil, errors.New("could not verify the validity of the received message")
@@ -364,13 +364,9 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 		return nil, errors.New("could not verify the validity of the received message")
 	}
 
-	jp.OtherX1G = msg.X3G
-	jp.OtherX2G = msg.X4G
-	jp.Phase = 5
-
 	// A = (G1 + G3 + G4) x [x2*s]
-	generator := jp.curve.NewPoint().Add(jp.x1G, jp.OtherX1G)
-	generator = generator.Add(generator, jp.OtherX2G)
+	generator := jp.curve.NewPoint().Add(jp.x1G, msg.X3G)
+	generator = generator.Add(generator, msg.X4G)
 	if jp.curve.Infinity(generator) {
 		return nil, errors.New("could not verify the validity of the received message")
 	}
@@ -383,11 +379,13 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 	if err != nil {
 		return nil, err
 	}
-
 	pass3Msg := ThreePassVariant3[P, S]{
 		A:     a,
 		XsZKP: xsZKP,
 	}
+	jp.OtherX1G = msg.X3G
+	jp.OtherX2G = msg.X4G
+	jp.Stage = 5
 	if err := jp.computeSharedKey(msg.B); err != nil {
 		return nil, err
 	}
@@ -395,32 +393,37 @@ func (jp *ThreePassJpake[P, S]) GetPass3Message(msg ThreePassVariant2[P, S]) (*T
 }
 
 func (jp *ThreePassJpake[P, S]) ProcessPass3Message(msg ThreePassVariant3[P, S]) error {
-	if jp.Phase != 4 {
-		return fmt.Errorf("expected phase 4, was %d", jp.Phase)
+	if jp.Stage != 4 {
+		return fmt.Errorf("expected stage 4, was %d", jp.Stage)
 	}
 	// validate ZKPs
 	tmp1 := jp.curve.NewPoint().Add(jp.x1G, jp.x2G)
 	zkpGenerator := tmp1.Add(tmp1, jp.OtherX1G)
 	xsProof := jp.checkZKP(msg.XsZKP, zkpGenerator, msg.A)
-	jp.Phase = 6
-
 	if !xsProof {
 		return errors.New("could not verify the validity of the received message")
 	}
 	if err := jp.computeSharedKey(msg.A); err != nil {
 		return err
 	}
-
+	jp.Stage = 6
 	return nil
 }
 
-func (jp *ThreePassJpake[P, S]) SessionConfirmation1() []byte {
+func (jp *ThreePassJpake[P, S]) SessionConfirmation1() ([]byte, error) {
+	if jp.Stage != 5 {
+		return nil, fmt.Errorf("expected stage 5, was %d", jp.Stage)
+	}
 	// MAC(k', "KC_1_U" || Alice || Bob || G1 || G2 || G3 || G4)
 	msg := concat([]byte("KC_1_U"), jp.userID, jp.OtherUserID, jp.x1G.Bytes(), jp.x2G.Bytes(), jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes())
-	return jp.config.generateConfirmationMac(jp.SessionKey[:], msg)
+	jp.Stage = 7
+	return jp.config.generateConfirmationMac(jp.SessionKey[:], msg), nil
 }
 
 func (jp *ThreePassJpake[P, S]) SessionConfirmation2(confirm1 []byte) ([]byte, error) {
+	if jp.Stage != 6 {
+		return nil, fmt.Errorf("expected stage 6, was %d", jp.Stage)
+	}
 	expectedMsg := concat([]byte("KC_1_U"), jp.OtherUserID, jp.userID, jp.OtherX1G.Bytes(), jp.OtherX2G.Bytes(), jp.x1G.Bytes(), jp.x2G.Bytes())
 
 	if subtle.ConstantTimeCompare(confirm1, jp.config.generateConfirmationMac(jp.SessionKey[:], expectedMsg)) != 1 {
@@ -436,6 +439,7 @@ func (jp *ThreePassJpake[P, S]) ProcessSessionConfirmation2(confirm2 []byte) err
 	if subtle.ConstantTimeCompare(confirm2, jp.config.generateConfirmationMac(jp.SessionKey[:], expectedMsg)) != 1 {
 		return errors.New("cannot confirm session")
 	}
+	jp.Stage = 8
 	return nil
 }
 
